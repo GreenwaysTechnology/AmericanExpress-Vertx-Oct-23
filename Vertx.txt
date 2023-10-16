@@ -1,0 +1,458 @@
+					Vert.x:
+
+What is Eclipse Vert.x ?
+
+Eclipse Vert.x is a tool-kit for building reactive applications on the JVM.
+
+toolkit is nothing but you can embed into any exiting applications written by using language or framework or lib.
+
+Framework is infrastructure for building application end to end , in order to apps written in frameworks , we need framework runtimes such as spring.
+
+ Vertx is functional,event driven,object oriented,reactive,non blocking io and async tookit for building "distributed application - Micro service" on java virtual machine.
+
+Vert.x is Polyglot tool kit for building micro services application.
+
+Verx allows different programming languages can talk each other.
+
+Polyglot means multi technology /language.
+
+ Vertx supports Polyglot on jvm.
+
+Does JVM support multi language(Polyglot)?
+
+   Yes!.
+
+2002,JCP published  specfication called "multi language" on jvm.
+ 
+Groovy, was the first reference implementation of that spec 
+Kotlin
+Jython - python + java
+
+Vetx PolyGlot
+
+You can use Vert.x with multiple languages including Java, Kotlin, JavaScript, Groovy, Ruby and Scala.
+
+Now a days, Vertx has been standardized only three languages - java,kotlin,groovy.
+
+Vert.x doesn't preach about what language is best — you choose the languages you want based on the task at hand and the skill-set of your team.
+
+We provide idiomatic APIs for every language that Vert.x supports.
+
+How these languages works on jvm/
+   jvm contract is only "byte code"
+
+             groovy,kotlin,javascript,scala,ruby.......
+	                |
+                    compilers
+                        |
+                      .class
+                        |
+                       jvm
+.....................................................................................
+ 		Building block of Vertx-Vertx Architecture
+.....................................................................................
+
+NonBlocking io:
+...............
+
+
+IO:
+
+Hardware devices typically provide the ability to input data into the computer or output data from the computer.
+
+To simplify the ability to support a variety of hardware devices, standardized application programming interfaces (API) are used.
+
+Application programs use the "System Call API" to request one of a finite set of preset I/O requests from the Operating System.
+
+The Operating System uses algorithms for processing the request that are device independent.
+
+The Operating System uses another API to request data from the device driver.
+
+The device driver is third party software that knows how to interact with the specific device to perform the I/O.
+
+Sometimes we have a layering of device drivers where one device driver will call on another device driver to facilitate the I/O.
+
+ An example of this is when devices are connected to a USB port. The driver for the device will make use of the USB device driver to facilitate passing data to and from the device.
+
+File Descriptor:
+..................
+
+File descriptor or file descriptor table is nothing but , it is "c" program which has all information about  io opertaions.
+
+Fd is bridge between application runtime/process and io devices.
+
+
+Blocking io code in java:
+........................
+
+blocking network socket app.
+
+
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+public class BlockingEco {
+    public static void main(String[] args) throws Throwable {
+        //this api interally communicates network interface card
+        ServerSocket server = new ServerSocket();
+        server.bind(new InetSocketAddress(3000));
+        System.out.println("Blocking Socket : listening for new Request");
+        while (true) {   // <1>
+            Socket socket = server.accept();
+            //each incomming request(socket request) allocate in a separate thread
+            new Thread(clientHandler(socket)).start();
+        }
+    }
+
+    private static Runnable clientHandler(Socket socket) {
+        return () -> {
+
+            try (
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(socket.getInputStream()));
+                    PrintWriter writer = new PrintWriter(
+                            new OutputStreamWriter(socket.getOutputStream()))) {
+                String line = "";
+                while (!"/quit".equals(line)) {
+                    line = reader.readLine();      // <2>
+                    System.out.println("~ " + line);
+                    writer.write(line + "\n");  // <3>
+                    writer.flush();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        };
+    }
+
+}
+
+Why not blocking?
+
+Blocking APIs waste resources, increase costs
+
+
+The main problem with the code above ,is that it allocates a new thread for each incoming connection(request) and threads are anything but cheap resources. 
+
+A thread needs memory, and the more threads you have, the more you put pressure on the operating system kernel scheduler, as it needs to give CPU time to the thread
+
+ Input/output operations such as readLine and write may block the thread, meaning that it is being parked by the operating system. This happens for two reasons:
+
+A read operation may be waiting for data to arrive from the network.
+A write operation may have to wait for buffers to be drained if they are full from a previous write operation
+
+NonBlocking io  = IO Multiplxing (Nonblocking io,SIGIO,POSX_IO FUNCTIONS)
+
+Today there are two io programming models = blocking and io multiplexing(Non,async)
+
+Generally all webservers work based on "Request per thread Model".
+
+2000,C10K - concurrently handling ten thousand connections.
+
+2000, Linux operating system introduced a new api for io operations which does not block thread - "select"	
+
+non blocking io operation: 
+
+1.select + read - first non blocking io operation introduced in linux operating system.
+
+2.poll - second non blocking io operation api introduced in linux. the difference is 
+         poll pushing data from kernal to application process rather pulling data          from  kernal table.
+
+3.Epoll -  this modern non blocking io api introduced in linux....
+
+Other Operating system non blocking abstractions:
+
+EPoll -Linux
+IOCP - Windows
+kqueue -mac and other open bsd versions.
+.....................................................................................
+java and non blocking:
+......................
+
+Does java support non blocking apis?
+
+No!
+
+Yes from Java 7 called "Dolphin".
+
+Dolphin introduced experimental model for building fast disk io, called "NIO"-NONBlocking IO.
+
+NIO version: non blocking version
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.nio.charset.Charset;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.regex.Pattern;
+
+public class AsynchronousEcho {
+
+  public static void main(String[] args) throws IOException {
+    Selector selector = Selector.open();
+
+    ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
+    serverSocketChannel.bind(new InetSocketAddress(3000));
+    serverSocketChannel.configureBlocking(false);
+    serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+
+    while (true) {
+      selector.select();
+      Iterator<SelectionKey> it = selector.selectedKeys().iterator();
+      while (it.hasNext()) {
+        SelectionKey key = it.next();
+        if (key.isAcceptable()) {
+          newConnection(selector, key);
+        } else if (key.isReadable()) {
+          echo(key);
+        } else if (key.isWritable()) {
+          continueEcho(selector, key);
+        }
+        it.remove();
+      }
+    }
+  }
+
+  private static class Context {
+    private final ByteBuffer nioBuffer = ByteBuffer.allocate(512);
+    private String currentLine = "";
+    private boolean terminating = false;
+  }
+
+  private static final HashMap<SocketChannel, Context> contexts = new HashMap<>();
+
+  private static void newConnection(Selector selector, SelectionKey key) throws IOException {
+    ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
+    SocketChannel socketChannel = serverSocketChannel.accept();
+    socketChannel
+      .configureBlocking(false)
+      .register(selector, SelectionKey.OP_READ);
+    contexts.put(socketChannel, new Context());
+  }
+
+  private static final Pattern QUIT = Pattern.compile("(\\r)?(\\n)?/quit$");
+
+  private static void echo(SelectionKey key) throws IOException {
+    SocketChannel socketChannel = (SocketChannel) key.channel();
+    Context context = contexts.get(socketChannel);
+    try {
+      socketChannel.read(context.nioBuffer);
+      context.nioBuffer.flip();
+      context.currentLine = context.currentLine + Charset.defaultCharset().decode(context.nioBuffer);
+      if (QUIT.matcher(context.currentLine).find()) {
+        context.terminating = true;
+      } else if (context.currentLine.length() > 16) {
+        context.currentLine = context.currentLine.substring(8);
+      }
+      context.nioBuffer.flip();
+      int count = socketChannel.write(context.nioBuffer);
+      if (count < context.nioBuffer.limit()) {
+        key.cancel();
+        socketChannel.register(key.selector(), SelectionKey.OP_WRITE);
+      } else {
+        context.nioBuffer.clear();
+        if (context.terminating) {
+          cleanup(socketChannel);
+        }
+      }
+    } catch (IOException err) {
+      err.printStackTrace();
+      cleanup(socketChannel);
+    }
+  }
+
+  private static void cleanup(SocketChannel socketChannel) throws IOException {
+    socketChannel.close();
+    contexts.remove(socketChannel);
+  }
+
+  private static void continueEcho(Selector selector, SelectionKey key) throws IOException {
+    SocketChannel socketChannel = (SocketChannel) key.channel();
+    Context context = contexts.get(socketChannel);
+    try {
+      int remainingBytes = context.nioBuffer.limit() - context.nioBuffer.position();
+      int count = socketChannel.write(context.nioBuffer);
+      if (count == remainingBytes) {
+        context.nioBuffer.clear();
+        key.cancel();
+        if (context.terminating) {
+          cleanup(socketChannel);
+        } else {
+          socketChannel.register(selector, SelectionKey.OP_READ);
+        }
+      }
+    } catch (IOException err) {
+      err.printStackTrace();
+      cleanup(socketChannel);
+    }
+  }
+}
+Problmes with NIO :
+
+It is also important to note that like most JDK APIs, java.nio focuses solely on what it does (here, I/O APIs).
+ 
+->It does not provide higher-level protocol-specific helpers, like for writing HTTP clients and servers.
+ 
+->Also, java.nio does not prescribe a threading model, which is still important to properly utilize CPU 
+cores, handle asynchronous I/O events, and articulate the application processing logic.
+
+->This is why, in practice, developers rarely deal with Java NIO. 
+.......................................................................................................
+
+Networking libraries like Netty and Apache Mina solve the shortcomings of Java NIO
+
+
+NETTY
+
+ "Netty is a NIO client server framework which enables quick and easy development of network applications such as protocol servers and clients. "
+
+It greatly simplifies and streamlines network programming such as TCP and UDP socket server.
+
+Unified API for various transport types - blocking and non-blocking socket
+
+Based on a flexible and extensible event model which allows clear separation of concerns- The first Reactor Model on jvm.
+
+        	     Netty Application
+		             |
+          	         nettycore
+			     |
+			    nio
+			     |
+		            jvm
+
+Apache MINA 
+
+  Apache MINA is a network application framework which helps users develop high performance and high scalability network applications easily.
+ It provides an abstract event-driven asynchronous API over various transports such as TCP/IP and 
+
+UDP/IP via Java NIO.
+NIO framework library,
+client server framework library, or
+a networking socket library
+
+		    Apache MINA 
+		         |
+          	      Minaapi
+			 |
+			nio
+			 |
+		        jvm
+
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+Vertx:
+
+Birth of Vertx Project
+
+Vertx was born to simulate Node.js Capability on JVM.
+ initally it was named "Node.X"
+
+A core project, called vertx-core, provides the APIs for asynchronous programming, non-blocking I/O, streaming, and convenient access to networked protocols such as TCP, UDP, DNS, HTTP or Web Sockets,
+
+Vertx is industry ready , polyglot toolkit for building Non blocking,async,evented io applications.
+
+Vertx has been built on the top of Netty Core.
+
+			
+			VertxApplication
+			      |
+			Vertx Core Runtime
+			      |
+			   Netty Core
+			      |
+			     NIO
+			      |
+			     JVM
+
+
+Objective of VertX:
+   
+    100% non blocking applications on jvm.
+
+
+NonBlocking IO Apis
+
+
+                     NonBlocking IO Application -VertApplication
+   --------------------------------------------------------------------		
+    Vertx-FS  Vertx-TCP/IP  Vertx-UDP Vertx-HTTP Vertx-HTTPS Vertx-SMTP .....
+  ---------------------------------------------------------------------
+			      |
+			Vertx Core Runtime
+			      |
+			   Netty Core
+			      |
+			     NIO
+			      |
+			     JVM
+
+vert-x is poly glot:
+
+ Vertx is java technology platform, Vertx runs on JVM.
+ Fundamentally JVM supports multiple language as JVM Spec dt 2003.
+
+
+             Java PL  Groovy Kotlin  Javascript  scala Ruby
+	            	|       |     |         |         |     |
+      -------------------------------------------------------------
+                               .class
+				                         |
+   --------------------------------------------------------------------		
+       Vertx-FS  Vertx-TCP/IP  Vertx-UDP Vertx-HTTP Vertx-HTTPS Vertx-SMTP .....
+  ---------------------------------------------------------------------
+			      |
+			Vertx Core Runtime
+			      |
+			   Netty Core
+			      |
+			     NIO
+			      |
+			     JVM
+
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+Vertx Runtime:
+
+Vertx run time is powered by non blocking io arch
+
+Vertx uses event loops
+ -event loops are used to process events which are dispatched by kernal.
+ -Event loops are just threads to process incoming events from kernal
+
+Event :
+
+  collection of event and data
+  How to read data?
+    you need handler- callback functions
+
+
+Vertx uses multi core event loop threads where as node js has only one event loop thread.
+
+Vertx uses per cpu core - 2 event loop, lets say i have 12 cores - 12 *2 =24 event loops.
+....................................................................................
+
+Lets enter into vertx app; how to build non blocking and async apps:
+....................................................................
+
+Lets code:
+
+-Vertx Project setup
+   -Maven Project
+   -Gradle Project
+
+1.plain maven project, add vertx depedencies,You can use template entry method provided by vertx .
+
+2.Vertx Starter project
+
+3.Vertx maven cli project
+
