@@ -455,4 +455,475 @@ Lets code:
 2.Vertx Starter project
 
 3.Vertx maven cli project
+.................................................................................
+			 How to create vertx cli project..
+
+https://start.vertx.io/
+
+Vertx application can be small to big enterprise microservice application.
+
+Like spring , starts with spring-core , after that ,spring-mvc,spring-data....(modules)
+
+Vertx also begins modules
+
+vertx-core ,vertx-web,vertx-data..............etc...
+
+vertx-core:
+
+How to run vertx app?
+
+Every Vertx apps will have entry point, configured in pom.xml
+
+ <main.verticle>com.amex.MainVerticle</main.verticle>
+ <launcher.class>io.vertx.core.Launcher</launcher.class>
+
+How to run vertx apps?
+
+1.compile the code and execute - dev mode.
+
+mvnw clean compile exec:java
+
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------------< com.amex:vertxcoreapp >------------------------
+[INFO] Building vertxcoreapp 1.0.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-clean-plugin:2.5:clean (default-clean) @ vertxcoreapp ---
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ vertxcoreapp ---
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] skip non existing resourceDirectory E:\session\AMex\2023\vertxcoreapp\src\main\resources
+[INFO]                                                                                         
+[INFO] --- maven-compiler-plugin:3.8.1:compile (default-compile) @ vertxcoreapp ---            
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 1 source file to E:\session\AMex\2023\vertxcoreapp\target\classes
+[INFO] 
+[INFO] --- exec-maven-plugin:3.0.0:java (default-cli) @ vertxcoreapp ---
+HTTP server started on port 8888
+Oct 16, 2023 2:22:56 PM io.vertx.core.impl.launcher.commands.VertxIsolatedDeployer
+INFO: Succeeded in deploying verticle
+
+By default vertx offers some Webservice which is running in port 8888
+
+http://localhost:8888/
+
+2.Creating production apps -deployment 
+
+mvnw clean package 
+
+ This command gives two jars.
+  
+ Regular jar  
+ fat jar
+
+How to run ?
+
+java -jar target/vertxcoreapp-1.0.0-SNAPSHOT-fat.jar
+.....................................................................................
+			   vertx Core concepts
+.....................................................................................
+
+Core Vertx Concepts:
+....................
+
+1.Vertx Instance , so Called "Vertx Engine". === Spring Container
+2.Verticles ; so called an Object through which you can create apps.
+
+Vertx Engine is a java class, represented as interface in the io.vertx.core package
+
+io.vertx.core package is core package
+
+Vertx Instance:
+
+ It is Object,Container Object. like Spring Container.
+
+-it is entry and exit point of vertx application.
+-on jvm(single) process can have single vertx instance.
+-vertx can host other objects.
+
+To create an instance of this class you can use the static factory methods:
+
+ vertx(), 
+ vertx(io.vertx.core.VertxOptions) 
+ clusteredVertx(io.vertx.core.VertxOptions, Handler)
+
+Vertx Instance can do 
+
+Creating TCP clients and servers
+Creating HTTP clients and servers
+Creating DNS clients
+Creating Datagram sockets
+Setting and cancelling periodic and one-shot timers
+Getting a reference to the event bus API
+Getting a reference to the file system API
+Getting a reference to the shared data API
+Deploying and undeploying verticles
+
+package com.amex;
+
+import io.vertx.core.Vertx;
+
+public class HelloVertx {
+  public static void main(String[] args) {
+    System.out.println("Creating vertx app");
+    Vertx vertx = Vertx.vertx();
+    System.out.println(vertx.getClass());
+
+    System.out.println("Main thread" + Thread.currentThread().getName());
+    //create simple web server
+    vertx.createHttpServer().requestHandler(req -> {
+      System.out.println("Server");
+      System.out.println("Vertx thread : " + Thread.currentThread().getName());
+      req.response().end("Hello Vertx");
+    }).listen(8080);
+
+  }
+}
+.....................................................................................
+Vertx modules:
+...............
+vertx-core
+vertx-web
+vertx-data
+vertx-microservices
+etc...
+
+
+Verticles
+Threading modles
+callbacks
+Promises
+Futures
+
+
+Verticle:
+  -It is java object
+  -It can be deployed and undeployed on vertx instance.
+
+What is deployment?
+
+The action of bringing "resources" into effective action
+
+In vertx, Brining Resources ready  for computation.
+
+Resources:
+ -Thread creation /allocation
+ -binding an object with that thread
+ -Register all event handlers in case of event driven programming
+ -Allocate memory if required for data/other 
+ -Ensures that other depenendant resources or ready.
+
+-It is based on design pattern called "Actor-like Model"
+-Verticles are bound to "Event loop" , are processed by event loop threads.
+
+Verticle is interface which provides life cycle methods 
+  -init   - called when verticle being initalized
+  -start - called when verticle during deployment
+  -stop  - called when verticles during undeployment
+
+
+if you are writing any verticle class, you cant use "Verticle" Interface directly.
+
+Vertx provides an implementation abstract class called "AbstractVerticle" class.
+
+io.vertx.core.AbstractVerticle
+io.vertx.rxjava3.core.AbstractVerticle
+io.vertx.rxjava.core.AbstractVerticle
+
+How to use Verticle?
+
+ AbstractVerticle is base class for creating our own verticles.
+
+
+eg:
+ if you are going to implement servlet , 
+
+public class MyServlet extends HttpServlet{
+
+  init  
+  doGet
+  doPost
+  destroy
+}
+package com.amex;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Context;
+import io.vertx.core.Vertx;
+
+public class MainVerticle extends AbstractVerticle {
+  //override verticle life cycle methods
+
+  @Override
+  public void init(Vertx vertx, Context context) {
+    super.init(vertx, context);
+    System.out.println("Init is called");
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    System.out.println("Start method is called");
+  }
+
+  @Override
+  public void stop() throws Exception {
+    super.stop();
+    System.out.println("stop method is called");
+  }
+}
+.....................................................................................
+	          How to create multiple verticles and deploy them
+....................................................................................
+
+There are many ways
+1.within main verticle and deploy other verticles
+2.write simple java class and through which you can deployment
+3.Vertx provides a runner class through which also you can deploymnet
+
+1.within main verticle and deploy other verticles
+
+
+package com.amex;
+
+import com.amex.verticles.GreeterVerticle;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Context;
+import io.vertx.core.Vertx;
+
+public class MainVerticle extends AbstractVerticle {
+  //override verticle life cycle methods
+  @Override
+  public void init(Vertx vertx, Context context) {
+    super.init(vertx, context);
+    System.out.println("Init is called");
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    System.out.println("Start method is called");
+    //deploy Greeter Verticle
+    //vertx variable is already available within every verticle we create.
+    // vertx.deployVerticle(new GreeterVerticle());
+    //vertx.deployVerticle(GreeterVerticle.class.getName());
+    vertx.deployVerticle("com.amex.verticles.GreeterVerticle");
+
+  }
+
+  @Override
+  public void stop() throws Exception {
+    super.stop();
+    System.out.println("stop method is called");
+    vertx.undeploy("com.amex.verticles.GreeterVerticle");
+  }
+}
+....................................................................................
+
+From plain java code how to deploy verticles?
+.............................................
+
+package com.amex;
+
+import com.amex.verticles.GreeterVerticle;
+import io.vertx.core.Vertx;
+
+public class VertlcleDeployer {
+  public static void main(String[] args) {
+    Vertx vertx = Vertx.vertx();
+    vertx.deployVerticle(new GreeterVerticle());
+  }
+}
+
+This code will not call life cycle method like stop.
+This is not recommended way of deploying verticles.
+
+Runner/Lanucher class
+.......................
+Lanuching vertx applications using main method without using "maven/gradle" configuration.
+package com.amex;
+
+import com.amex.verticles.GreeterVerticle;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+
+public class LanucherDeployer extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", LanucherDeployer.class.getName());
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    System.out.println("Deployer starting");
+    vertx.deployVerticle(new GreeterVerticle());
+  }
+
+  @Override
+  public void stop() throws Exception {
+    super.stop();
+    System.out.println("Deployer ending");
+  }
+}
+
+Output:
+Deployer starting
+GreeterVerticle
+Oct 16, 2023 4:37:14 PM io.vertx.core.impl.launcher.commands.VertxIsolatedDeployer
+INFO: Succeeded in deploying verticle
+GreeterVerticle has been stopped
+Deployer ending
+.....................................................................................
+			  Vertx Coding Style
+...................................................................................
+
+Patterns to write non blocking apps:
+
+1.callback style -traditionals way.
+2.Reactive style -Streaming pattern
+
+Non blocking apis
+1.timer
+2.http
+3.fs
+4.socket
+5.database
+etc.......
+
+Callback/Listener Style:
+1.Future
+2.Promises
+
+if you come from java script && node.js background,you know the concept called "Callback function" - callback function is other wise called as "listener function" or "handler function".
+
+
+Handler Function /Callback function/Listener function:
+.......................................................
+1.Handler functions are not called by developers directly like other functions.
+2.Handlers functions are called by a thread "Event Loop".
+3.Handler functions are available inside Event Queue as passive instruction.
+4.Once async operation(task-database connnection) is completed, os triggers event, along with event, data, and its   handler is pushed into event queue, event loop thread starts processing event by assinging a handler function.
+
+What is handler function/callback function/listener function for?
+
+ "To handle async success /failure result"
+     "The result of async opertion could be either success or failure".
+
+io.vertx.Future:
+
+-it is interface used to handle async success/failure results.
+-vertx uses Future(Object) to represent "Asynchronous" Results
+-Future is like transport object to transport data between caller and callee in async  manner
+
+Caller -------Future-----Callee
+
+
+What type of data Future can carry?
+
+-Success--------|
+                  ---->Future
+-Failure--------|
+
+
+AsynResult<T>:
+
+Encapsulates the result of an asynchronous operation.
+
+Object which has either success data or failure data.
+
+If it failed then the cause of the failure is available with cause().
+
+If it succeeded then the actual result is available with result()
+
+
+Future is interface , encapsulate response(Success/failure), we need to create Object 
+for "Future" implementation
+
+ Future f = Future.future() // create FutureImpl object
+
+Two major api for response:
+
+
+1.complete()  and complete(T result) =>Success Response, encasulated inside this api
+
+2.fail(String failureMessage) and fail(Throwable cause) =>Failure response, encapsulate  inside this api.
+
+Handler apis for handling response;
+...................................
+
+1.succeeded() : empty response
+2.default Future<T> setHandler(Handler<AsyncResult<T>> handler)
+3.default Future<T> onComplete(Handler<AsyncResult<T>> handler)
+4.onSuccess
+5.onFailure
+
+
+
+AsyncResult interface apis
+
+ -result() - get the success result sent by Future
+ -cause()   -get the failure result sent by Future
+ -succeed() -test whether it was success or failure
+ -failed()  -test whether it was failure or success
+....................................................................................
+
+Use case: Get Empty Future
+
+package com.amex.futures;
+
+import io.vertx.core.*;
+
+public class FutureDemoVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", FutureDemoVerticle.class.getName());
+  }
+
+  //Callee
+  //create simple future and return no Result.
+  public Future<Void> getEmptyFuture() {
+    //create Future Object : Anonymous pattern using java inner class
+//    Future<Void> future = Future.future(new Handler<Promise<Void>>() {
+//      @Override
+//      public void handle(Promise<Void> event) {
+//        event.complete();
+//      }
+//    });
+    // create Future Object : using lambda pattern:It is recommended
+    Future<Void> future = Future.future(event -> {
+      event.complete();
+    });
+    return future;
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    System.out.println("Future Verticle");
+    //caller
+//    getEmptyFuture().onComplete(new Handler<AsyncResult<Void>>() {
+//      @Override
+//      public void handle(AsyncResult<Void> event) {
+//        //here only we grab result
+//        if (event.succeeded()) {
+//          System.out.println("Success");
+//          event.result();
+//        } else {
+//          System.out.println("Failed");
+//          System.out.println(event.cause().getMessage());
+//        }
+//      }
+//    });
+    getEmptyFuture().onComplete(event -> {
+      if (event.succeeded()) {
+        System.out.println("Success");
+        event.result();
+      } else {
+        System.out.println("Failed");
+        System.out.println(event.cause().getMessage());
+      }
+    });
+  }
+}
+.........
 
