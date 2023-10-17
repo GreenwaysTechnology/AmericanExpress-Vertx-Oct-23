@@ -925,5 +925,784 @@ public class FutureDemoVerticle extends AbstractVerticle {
     });
   }
 }
-.........
+....................................................................................
+
+Future with data,error, data and error:
+......................................
+package com.amex.futures;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.Launcher;
+
+public class FutureWithData extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", FutureWithData.class.getName());
+  }
+
+  //Return data with Future.
+  public Future<String> sayHello() {
+    return Future.future(future -> future.complete("Hello"));
+  }
+
+  //return error data with Future
+  public Future<String> getError() {
+    return Future.future(future -> future.fail("Something went wrong!"));
+  }
+
+  //future with biz logic
+  public Future<String> login(String userName, String password) {
+
+    return Future.future(handler -> {
+      //biz logic
+      if (userName.equals("admin") && password.equals("admin")) {
+        handler.complete("Login Success");
+      } else {
+        handler.fail("Login failed");
+      }
+    });
+
+  }
+
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //subscribe future .
+    sayHello().onComplete(event -> {
+      if (event.succeeded()) {
+        System.out.println(event.result());
+      } else {
+        System.out.println(event.cause());
+      }
+    });
+    //grab error Message
+    getError().onComplete(event -> {
+      if (event.failed()) {
+        System.out.println(event.cause().getMessage());
+      }
+    });
+    //login with success and error
+    login("admin", "admin").onComplete(event -> {
+      if (event.failed()) {
+        System.out.println(event.cause().getMessage());
+      } else {
+        System.out.println(event.result());
+      }
+    });
+    //login with failure data
+    login("foo", "bar").onComplete(event -> {
+      if (event.failed()) {
+        System.out.println(event.cause().getMessage());
+      } else {
+        System.out.println(event.result());
+      }
+    });
+  }
+}
+.....................................................................................
+Shortcuts for Listener Code;
+.............................
+
+Listener api Which returns Future.
+
+Syntax:
+someApi().onComplete(Handler<AsynResult>)
+someApi().onSuccess(res->{});
+someApi().onError(err->{});
+someApi().onSuccess(res->{}).onError(err->{});
+someApi().onSuccess(System.out::println).onError(System.out::println);
+
+package com.amex.futures;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.Launcher;
+
+public class FutureWithData extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", FutureWithData.class.getName());
+  }
+
+  //Return data with Future.
+  public Future<String> sayHello() {
+    return Future.future(future -> future.complete("Hello"));
+  }
+
+  //return error data with Future
+  public Future<String> getError() {
+    return Future.future(future -> future.fail("Something went wrong!"));
+  }
+
+  //future with biz logic
+  public Future<String> login(String userName, String password) {
+
+    return Future.future(handler -> {
+      //biz logic
+      if (userName.equals("admin") && password.equals("admin")) {
+        handler.complete("Login Success");
+      } else {
+        handler.fail("Login failed");
+      }
+    });
+
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //short cut apis
+    //sayHello().onSuccess(res -> System.out.println(res));
+    sayHello().onSuccess(System.out::println);
+    getError().onFailure(System.out::println);
+    login("admin", "admin")
+      .onSuccess(System.out::println)
+      .onFailure(System.out::println);
+  }
+}
+.....................................................................................
+			 Future Object Creation Patterns
+....................................................................................
+
+Pattern 1: Factory Method pattern
+
+Future.future()
+
+  public Future<String> login(String userName, String password) {
+
+    return Future.future(handler -> {
+      //biz logic
+      if (userName.equals("admin") && password.equals("admin")) {
+        handler.complete("Login Success");
+      } else {
+        handler.fail("Login failed");
+      }
+    });
+
+  }
+
+Pattern 2:
+
+Future.succeedFuture() - Returns success Result
+Future.failedFuture() -> Returns failure Result.
+
+ public Future<String> auth(String userName, String password) {
+    if (userName.equals("admin")) {
+      return Future.succeededFuture("Login Success");
+    }
+    return Future.failedFuture("Login Failed");
+  }
+
+Pattern 3 :
+ Instead of Returning Future, We can pass function as Parameter(Higher Order Function)
+
+    authenticat("admin", "admin", handler -> {
+      if (handler.failed()) {
+        System.out.println(handler.cause().getMessage());
+      } else {
+        System.out.println(handler.result());
+      }
+    });
+
+Full code:
+package com.amex.futures;
+
+import io.vertx.core.*;
+
+public class FutureObjectCreationPatterns extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", FutureObjectCreationPatterns.class.getName());
+  }
+
+  //Pattern 1:
+  public Future<String> login(String userName, String password) {
+    return Future.future(handler -> {
+      //biz logic
+      if (userName.equals("admin") && password.equals("admin")) {
+        handler.complete("Login Success");
+      } else {
+        handler.fail("Login failed");
+      }
+    });
+  }
+
+  //Pattern 2:
+  public Future<String> auth(String userName, String password) {
+    if (userName.equals("admin") && password.equals("admin")) {
+      return Future.succeededFuture("Login Success");
+    }
+    return Future.failedFuture("Login Failed");
+  }
+
+  //Pattern 3: Function as parameter : Higher order function
+  public void authenticat(String userName, String password, Handler<AsyncResult<String>> asyncHandler) {
+    if (userName.equals("admin") && password.equals("admin")) {
+      asyncHandler.handle(Future.succeededFuture("Login success"));
+    } else {
+      asyncHandler.handle(Future.failedFuture("Login Failed"));
+    }
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //pattern 1:
+    login("admin", "admin")
+      .onSuccess(System.out::println)
+      .onFailure(System.out::println);
+    // pattern 2:
+    auth("admin", "admin")
+      .onSuccess(System.out::println)
+      .onFailure(System.out::println);
+
+    //Pattern 3:
+    authenticat("admin", "admin", handler -> {
+      if (handler.failed()) {
+        System.out.println(handler.cause().getMessage());
+      } else {
+        System.out.println(handler.result());
+      }
+    });
+  }
+}
+.....................................................................................
+		     Callback Chaining - Nested Callbacks
+.....................................................................................
+
+In Sync application, the flow will go step by step
+
+Connection conn = DriverManager.getConnection();
+Statement st = conn.createStatement();
+ResultSet rows = st.executeQuery();
+
+Here flow will go based on previous statement , one after another another.
+
+
+Connection conn = DriverManager.getConnection();
+Statement st = conn.createStatement();
+ResultSet rows = st.executeQuery();
+FormateResult()
+AddResponse into http Stream
+send Response to the client
+....................................................................................
+
+What if the same task can be done in functional programming or async way; Vertx
+
+Functional sequential work flow
+  Nested callbacks , callback chaining, functional style.
+ 
+Handler function is called as callback function.
+
+"The output of one callback is input to the another callback: nested callbacks".
+
+ cb1
+   --cb2
+       --cb3
+            --cbN
+                  --process the result
+
+
+Use Case:
+   getUser() -----if user is available(success)
+			|
+			 -----call login method with output of getUser
+			|
+		 if failed
+		     |
+		     You throw error
+
+Note: The output of one callback will be input to another function.
+............
+
+Code:
+package com.amex.futures.callbacks;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.Launcher;
+
+//Model class
+class User {
+  private String userName;
+  private String password;
+
+  public User() {
+  }
+
+  public User(String userName, String password) {
+    this.userName = userName;
+    this.password = password;
+  }
+
+  public String getUserName() {
+    return userName;
+  }
+
+  public void setUserName(String userName) {
+    this.userName = userName;
+  }
+
+  public String getPassword() {
+    return password;
+  }
+
+  public void setPassword(String password) {
+    this.password = password;
+  }
+
+  @Override
+  public String toString() {
+    return "User{" +
+      "userName='" + userName + '\'' +
+      ", password='" + password + '\'' +
+      '}';
+  }
+}
+
+public class CallbackVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", CallbackVerticle.class.getName());
+  }
+
+  //getUser api
+  private Future<User> getUser() {
+    System.out.println("Get User is called");
+    User user = new User("admin", "admin");
+//    user = null;
+    if (user != null) {
+      return Future.succeededFuture(user);
+    } else {
+      return Future.failedFuture("User Not Found");
+    }
+  }
+
+  //login api
+  private Future<String> login(User user) {
+    System.out.println("Login  is called");
+    if (user.getUserName().equals("admin") && user.getPassword().equals("admin")) {
+      return Future.succeededFuture("login success");
+    } else {
+      return Future.failedFuture("Login failed ");
+    }
+  }
+
+  //show dashboard
+  private Future<String> showDashboard(String status) {
+    System.out.println("showDashboard  is called");
+    if (status.equals("login success")) {
+      return Future.succeededFuture("You are admin");
+    } else {
+      return Future.failedFuture("You are not admin");
+    }
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    getUser().onComplete(userHandler -> {
+      if (userHandler.succeeded()) {
+        // System.out.println(userHandler.result());
+        //call login method
+        login(userHandler.result()).onComplete(loginHandler -> {
+          if (loginHandler.succeeded()) {
+            //call show dashboard
+            showDashboard(loginHandler.result()).onComplete(dashboardHandler -> {
+              if (dashboardHandler.succeeded()) {
+                System.out.println(dashboardHandler.result());
+              } else {
+                System.out.println(dashboardHandler.cause().getMessage());
+              }
+            });
+          } else {
+            System.out.println(loginHandler.cause().getMessage());
+          }
+        });
+      } else {
+        System.out.println(userHandler.cause().getMessage());
+      }
+    });
+  }
+}
+.....................................................................................
+			  Callback Hell
+.....................................................................................
+getUser().onComplete(userHandler -> {
+      if (userHandler.succeeded()) {
+        // System.out.println(userHandler.result());
+        //call login method
+        login(userHandler.result()).onComplete(loginHandler -> {
+          if (loginHandler.succeeded()) {
+            //call show dashboard
+            showDashboard(loginHandler.result()).onComplete(dashboardHandler -> {
+              if (dashboardHandler.succeeded()) {
+                System.out.println(dashboardHandler.result());
+              } else {
+                System.out.println(dashboardHandler.cause().getMessage());
+              }
+            });
+          } else {
+            System.out.println(loginHandler.cause().getMessage());
+          }
+        });
+      } else {
+        System.out.println(userHandler.cause().getMessage());
+      }
+    });
+
+Look at the above code, ask your self.
+
+1.IS it easy to understand
+2.is it easy to scale
+3.Is it easy to maintain
+
+No!
+
+ This is called  callback hell; The callback hell is way of writing complex callback based program.
+
+Can we escape from the callback hell problem, or how to write better callback based programming.
+
+Yes!.
+
+Soultion 1:
+............
+Using onSuccess and onFailure.
+package com.amex.futures.callbacks;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Future;
+
+public class CallbackHellSoultion extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", CallbackVerticle.class.getName());
+  }
+
+  //getUser api
+  private Future<User> getUser() {
+    System.out.println("Get User is called");
+    User user = new User("admin", "admin");
+//    user = null;
+    if (user != null) {
+      return Future.succeededFuture(user);
+    } else {
+      return Future.failedFuture("User Not Found");
+    }
+  }
+
+  //login api
+  private Future<String> login(User user) {
+    System.out.println("Login  is called");
+    if (user.getUserName().equals("admin") && user.getPassword().equals("admin")) {
+      return Future.succeededFuture("login success");
+    } else {
+      return Future.failedFuture("Login failed ");
+    }
+  }
+
+  //show dashboard
+  private Future<String> showDashboard(String status) {
+    System.out.println("showDashboard  is called");
+    if (status.equals("login success")) {
+      return Future.succeededFuture("You are admin");
+    } else {
+      return Future.failedFuture("You are not admin");
+    }
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //solution 1:
+    getUser().onSuccess(user -> {
+      login(user).onSuccess(status -> {
+        showDashboard(status).onSuccess(page -> {
+          System.out.println(page);
+        }).onFailure(err -> System.out.println(err));
+      }).onFailure(loginErr -> {
+        System.out.println(loginErr.getMessage());
+      });
+    }).onFailure(userErr -> {
+      System.out.println(userErr.getMessage());
+    });
+  }
+}
+........................
+
+Solution 2: Using Future.compose method
+
+Used to chain multiple callbacks in more readable way.
+package com.amex.futures.callbacks;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Future;
+
+public class CallbackHellSoultion extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", CallbackHellSoultion.class.getName());
+  }
+
+  //getUser api
+  private Future<User> getUser() {
+    System.out.println("Get User is called");
+    User user = new User("admin", "admin");
+//    user = null;
+    if (user != null) {
+      return Future.succeededFuture(user);
+    } else {
+      return Future.failedFuture("User Not Found");
+    }
+  }
+
+  //login api
+  private Future<String> login(User user) {
+    System.out.println("Login  is called");
+    if (user.getUserName().equals("admin") && user.getPassword().equals("admin")) {
+      return Future.succeededFuture("login success");
+    } else {
+      return Future.failedFuture("Login failed ");
+    }
+  }
+
+  //show dashboard
+  private Future<String> showDashboard(String status) {
+    System.out.println("showDashboard  is called");
+    if (status.equals("login success")) {
+      return Future.succeededFuture("You are admin");
+    } else {
+      return Future.failedFuture("You are not admin");
+    }
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //solution 1:
+//    getUser().onSuccess(user -> {
+//      login(user).onSuccess(status -> {
+//        showDashboard(status).onSuccess(page -> {
+//          System.out.println(page);
+//        }).onFailure(err -> System.out.println(err));
+//      }).onFailure(loginErr -> {
+//        System.out.println(loginErr.getMessage());
+//      });
+//    }).onFailure(userErr -> {
+//      System.out.println(userErr.getMessage());
+//    });
+
+//    //solution 2: Using Future.compose method
+    getUser().compose(user -> {
+      return login(user);
+    }).compose(status -> {
+      return showDashboard(status);
+    }).onSuccess(res -> {
+      System.out.println(res);
+    }).onFailure(err -> {
+      System.out.println(err.getMessage());
+    });
+
+  }
+}
+
+Compose Refactoring: Using Lambdas
+
+//Solution 2.1: Using Future.compose method lambda refactoring.
+
+    getUser()
+      .compose(user -> login(user))
+      .compose(status -> showDashboard(status))
+      .onSuccess(res -> {
+        System.out.println(res);
+      }).onFailure(err -> {
+        System.out.println(err.getMessage());
+      });
+
+    //Soution 2.2 : Using Future.compose using Method reference
+    getUser()
+      .compose(this::login)
+      .compose(this::showDashboard)
+      .onSuccess(System.out::println)
+      .onFailure(System.out::println);
+..........................
+Callback Hell Solution code:
+package com.amex.futures.callbacks;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Future;
+
+public class CallbackHellSoultion extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", CallbackHellSoultion.class.getName());
+  }
+
+  //getUser api
+  private Future<User> getUser() {
+    System.out.println("Get User is called");
+    User user = new User("admin", "admin");
+//    user = null;
+    if (user != null) {
+      return Future.succeededFuture(user);
+    } else {
+      return Future.failedFuture("User Not Found");
+    }
+  }
+
+  //login api
+  private Future<String> login(User user) {
+    System.out.println("Login  is called");
+    if (user.getUserName().equals("admin") && user.getPassword().equals("admin")) {
+      return Future.succeededFuture("login success");
+    } else {
+      return Future.failedFuture("Login failed ");
+    }
+  }
+
+  //show dashboard
+  private Future<String> showDashboard(String status) {
+    System.out.println("showDashboard  is called");
+    if (status.equals("login success")) {
+      return Future.succeededFuture("You are admin");
+    } else {
+      return Future.failedFuture("You are not admin");
+    }
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //solution 1:
+//    getUser().onSuccess(user -> {
+//      login(user).onSuccess(status -> {
+//        showDashboard(status).onSuccess(page -> {
+//          System.out.println(page);
+//        }).onFailure(err -> System.out.println(err));
+//      }).onFailure(loginErr -> {
+//        System.out.println(loginErr.getMessage());
+//      });
+//    }).onFailure(userErr -> {
+//      System.out.println(userErr.getMessage());
+//    });
+
+//    //solution 2: Using Future.compose method
+//    getUser().compose(user -> {
+//      return login(user);
+//    }).compose(status -> {
+//      return showDashboard(status);
+//    }).onSuccess(res -> {
+//      System.out.println(res);
+//    }).onFailure(err -> {
+//      System.out.println(err.getMessage());
+//    });
+    //Solution 2.1: Using Future.compose method lambda refactoring.
+
+//    getUser()
+//      .compose(user -> login(user))
+//      .compose(status -> showDashboard(status))
+//      .onSuccess(res -> {
+//        System.out.println(res);
+//      }).onFailure(err -> {
+//        System.out.println(err.getMessage());
+//      });
+    //Soution 2.2 : Using Future.compose using Method reference
+    getUser()
+      .compose(this::login)
+      .compose(this::showDashboard)
+      .onSuccess(System.out::println)
+      .onFailure(System.out::println);
+  }
+}
+.....................................................................................
+			  Advanced Composition: CompositeFuture
+....................................................................................
+
+Lets say i have three methods
+
+-startDbServer
+-startHttpServer
+-startConfigServer
+
+ I need to ensure that my app must be initalized only , all servers are up, if any one server is failed, stop all servers/ dont initialize my app.
+
+Future Coordination:
+  Coordination of multiple futures can be achived with Vertx Futures.
+
+Vertx supports concurrent composition(running serveral async operations in parall) and code looks like sequential - chaining async operations...
+
+Syntax:
+ CompositeFuture.all(f1,f2,f3,f4,f5,f6)
+
+  -All composition waits until all futures are successfull or any one failed.
+
+
+ CompositeFuture.any(f1,f2,f3,f4,f5,f6)
+    Any one Compostion waits for any one succeedFuture.
+   
+
+package com.amex.futures.callbacks;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.CompositeFuture;
+import io.vertx.core.Future;
+import io.vertx.core.Launcher;
+
+public class CompositFutureVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", CompositFutureVerticle.class.getName());
+  }
+
+  //start Db server
+  public Future<String> startDbServer() {
+    System.out.println("Db Server started");
+    return Future.succeededFuture("Db Server is Up");
+  }
+
+  //start web server
+  public Future<String> startWebServer() {
+    System.out.println("Web Server is started");
+   // return Future.succeededFuture("WebServer is Up");
+    return Future.failedFuture("Failed WebServer startup");
+  }
+
+  //config Server
+  public Future<String> startConfigServer() {
+    System.out.println("Config Server is started");
+    return Future.succeededFuture("ConfigServer is Up");
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    Future<String> dbServer = startDbServer();
+    Future<String> webServer = startWebServer();
+    Future<String> configServer = startConfigServer();
+
+    CompositeFuture.all(dbServer, webServer, configServer).onComplete(ar -> {
+      if (ar.succeeded()) {
+        System.out.println("All Server is Up");
+        //do something....
+      } else {
+        System.out.println(ar.cause().getMessage());
+      }
+    });
+
+    System.out.println("...Any...");
+    CompositeFuture.any(dbServer, webServer, configServer).onComplete(ar -> {
+      if (ar.succeeded()) {
+        System.out.println("All Server is Up");
+        //do something....
+      } else {
+        System.out.println(ar.cause().getMessage());
+      }
+    });
+  }
+}
+
+
+
+
+
+
+
+
 

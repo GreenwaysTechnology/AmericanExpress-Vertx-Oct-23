@@ -1,0 +1,11 @@
+
+Microservices:
+1.HTTP Based - REST APIS
+2.Database integration
+3.Kafka Integration
+Service Communication
+4.Event bus - TCP Communication
+5.HTTP Communication - WebClient
+6.Service Discovery and registry
+7.Service Configuration
+8.Deployment
