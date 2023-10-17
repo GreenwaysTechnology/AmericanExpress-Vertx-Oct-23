@@ -35,10 +35,19 @@ public class PeriodicTimerVerticle extends AbstractVerticle {
   public void start(Promise<Void> startPromise) throws Exception {
     super.start(startPromise);
     //tick();
-    poll(ar -> {
-      if (ar.succeeded()) {
-        System.out.println(ar.result());
-      }
-    });
+//    poll(ar -> {
+//      if (ar.succeeded()) {
+//        System.out.println(ar.result());
+//      }
+//    });
+    vertx.createHttpServer()
+      .requestHandler(req -> req.response().end("Ok"))
+      .listen(8080, ar -> {
+        if (ar.succeeded()) {
+          startPromise.complete();
+        } else {
+          startPromise.fail(ar.cause());
+        }
+      });
   }
 }
