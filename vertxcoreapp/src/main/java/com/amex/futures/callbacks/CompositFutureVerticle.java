@@ -1,9 +1,6 @@
 package com.amex.futures.callbacks;
 
-import io.vertx.core.AbstractVerticle;
-import io.vertx.core.CompositeFuture;
-import io.vertx.core.Future;
-import io.vertx.core.Launcher;
+import io.vertx.core.*;
 
 public class CompositFutureVerticle extends AbstractVerticle {
   public static void main(String[] args) {
@@ -14,7 +11,9 @@ public class CompositFutureVerticle extends AbstractVerticle {
   public Future<String> startDbServer() {
     System.out.println("Db Server started");
     return Future.succeededFuture("Db Server is Up");
+
   }
+
 
   //start web server
   public Future<String> startWebServer() {
@@ -32,6 +31,8 @@ public class CompositFutureVerticle extends AbstractVerticle {
   @Override
   public void start() throws Exception {
     super.start();
+
+
     Future<String> dbServer = startDbServer();
     Future<String> webServer = startWebServer();
     Future<String> configServer = startConfigServer();

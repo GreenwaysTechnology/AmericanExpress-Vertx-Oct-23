@@ -1697,8 +1697,325 @@ public class CompositFutureVerticle extends AbstractVerticle {
     });
   }
 }
+.....................................................................................
+				Promises
+....................................................................................
+
+Dont confuse futures with promises
+
+if futures are represent the "read side" of an asynchronous result, promises are the "write side".
+
+Promises are inspired from java script largly.
+
+Promises are semantically meaningfull abstraction for handling async result.
+
+Most of the developers confuse with java Futures and Vertx Futures, in order to avoid confusion, promises were introduced.
+
+Promises cant't be processed directly with "OnComplete/OnSuccess" apis
+
+Promises must be converted into Future before processing.
+
+package com.amex.promises;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+public class PromisesVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PromisesVerticle.class.getName());
+  }
+
+  //create Promise and encapulte the data and return.
+  public Promise<String> getHelloPromise() {
+    Promise promise = Promise.promise();
+    promise.complete("Hello");
+    return promise;
+
+  }
+
+  public Future<String> getHaiPromise() {
+    Promise promise = Promise.promise();
+    promise.complete("Hai");
+    return promise.future();
+
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    getHelloPromise().future().onSuccess(System.out::println);
+    getHaiPromise().onSuccess(System.out::println);
+  }
+}
+.....................................................................................
+			  verticle start and stop method with promises
+.....................................................................................
+
+Async Verticle start and stop methods:
+
+sometimes you want to do something in your verticle startup which takes some time and you dont want the verticle to be considered deployed until that happens.
+For Eg you might want to start an http server start method and propagate the asyn result of server listen method.
+
+The way to do it is to implement the asynchronous start method (Start with method with Promise Arg)
+ This version of the method takes Promise as a parameter. when the method returns verticle will be not considered deployed.
+
+Every verticle will have unique deploymentId, which can be used to undeploy the verticles
+
+package com.amex.promises;
+
+import com.amex.verticles.GreeterVerticle;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+public class PromiseStartVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PromiseStartVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    vertx.deployVerticle(new GreeterVerticle(), ar -> {
+      if (ar.succeeded()) {
+        System.out.println(GreeterVerticle.class.getName() + " Deployement Id  " + ar.result());
+        startPromise.future().onSuccess(System.out::println); //ensure that this verticle has been successfull
+      } else {
+        //startPromise.fail("Something went wrong");
+      }
+    });
+  }
+
+  @Override
+  public void stop(Promise<Void> stopPromise) throws Exception {
+    super.stop(stopPromise);
+  }
+}
+.....................................................................................	
+			 Building Non blocking or Async apps
+.....................................................................................
+
+in order to build non blocking io apps (network,filesystem) and timers, language or framework/lib/toolkit has to provide basic requirment.
+
+1.Runtime should have faciltity to talk to low level operating system non blocking apis such as "select/poll/epoll-linux, iocp-windows,kqueue-mac,unix".
+
+2.For Application developers , the language or framework/lib/toolkit must provide high level apis in order to communicate low level system calls api - vertx provides high level apis.
+
+3.At runtime level, Runtime must provide threading features to listen for os kernal events. Event loop threads.
+
+4.Program level, we must bind function to handle such events(callbacks)
+
+Vertx non blocking apis:
+.......................
+
+1.Timer 
+2.File System
+3.Http Api
+4.Socket api
+5.Udp and DataGram 
+etc....
+
+Timer:
+......
+
+It is common in vertx to want to perform some action after a certain delay or perdically.
+
+Timer is special non blocking api which schdules any task in delayed manner which does not block the current thread.
+
+Task is executed by "CPU" level.
+
+Timer is not part of FileDecriptor table because it is not an IO operation.
+
+Types of timers:
+1.one-shot timers
+2.Periodic timers.
+
+one-shot Timers:
+
+1.Basic Timer:
+package com.amex.async.timers;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+public class OneShotTimerVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", OneShotTimerVerticle.class.getName());
+  }
+
+  //simple delay
+  public void delay() {
+    vertx.setTimer(1000, handler -> {
+      System.out.println("I am delayed task");
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println("start");
+    delay();
+    System.out.println("end");
+  }
+}
+....................................................................................
+
+What if i want to return certain result after time out?
+
+package com.amex.async.timers;
+
+import io.vertx.core.*;
+
+public class TimerWithDataVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", TimerWithDataVerticle.class.getName());
+  }
+
+  //Data Transfer with Future with delay
+  public Future<String> getMessage() {
+    return Future.future(ar -> {
+      vertx.setTimer(1000, handler -> {
+        String response = "Hello!!!";
+        ar.complete(response);
+      });
+    });
+  }
+
+  //Data transfer using callbacks pattern
+  public void transfer(Handler<AsyncResult<String>> aHandler) {
+    vertx.setTimer(2000, timerHandler -> {
+      String response = "Hello,How are you!";
+      aHandler.handle(Future.succeededFuture(response));
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println("start");
+    getMessage().onSuccess(System.out::println);
+    transfer(aResult -> {
+      if (aResult.succeeded()) {
+        System.out.println(aResult.result());
+      }
+    });
+    System.out.println("end");
+  }
+}
+
+Periodic timers:
+ Timers keeps which are keep on running...
+
+vertx.setPeriodic(timer,callback)
+
+package com.amex.async.timers;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+public class PeriodicTimerVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PeriodicTimerVerticle.class.getName());
+  }
+
+  public void tick() {
+    vertx.setPeriodic(1000, handler -> {
+      System.out.println(Math.random());
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    tick();
+  }
+}
+
+What if i want to stop timers after some time?
+setPeriodic() , which returns timerId, which can be used to cancel the timer...
+package com.amex.async.timers;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+public class PeriodicTimerVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PeriodicTimerVerticle.class.getName());
+  }
+
+  public void tick() {
+    long timerId = vertx.setPeriodic(1000, handler -> {
+      System.out.println(Math.random());
+    });
+    //cancel the timer after certain time or certain condition
+    vertx.setTimer(10000, handler -> {
+      System.out.println("Stop Polling");
+      vertx.cancelTimer(timerId);
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    tick();
+  }
+}
+........
+How to return data from the Periodic timer?
+
+We cant return Future which encapuslate Periodic timer, because once if return future that cant hold next tick...
+
+We have to use always callback pattern.
+package com.amex.async.timers;
+
+import io.vertx.core.*;
+
+public class PeriodicTimerVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PeriodicTimerVerticle.class.getName());
+  }
 
 
+  public void tick() {
+    long timerId = vertx.setPeriodic(1000, handler -> {
+      System.out.println(Math.random());
+    });
+    //cancel the timer after certain time or certain condition
+    vertx.setTimer(10000, handler -> {
+      System.out.println("Stop Polling");
+      vertx.cancelTimer(timerId);
+    });
+  }
+
+  //send data to the caller
+  public void poll(Handler<AsyncResult<Double>> aHandler) {
+    long timerId = vertx.setPeriodic(1000, handler -> {
+      aHandler.handle(Future.succeededFuture(Math.random()));
+    });
+    //cancel the timer after certain time or certain condition
+    vertx.setTimer(10000, handler -> {
+      System.out.println("Stop Polling");
+      vertx.cancelTimer(timerId);
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //tick();
+    poll(ar -> {
+      if (ar.succeeded()) {
+        System.out.println(ar.result());
+      }
+    });
+  }
+}
+.....................................................................................
 
 
 
