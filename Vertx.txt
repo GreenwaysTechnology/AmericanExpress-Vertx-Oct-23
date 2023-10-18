@@ -3085,6 +3085,14 @@ JDBC Client:
 =>As of now JPA ,hibernate ORM is not supported by vertx.
 =>JDBC code you can write in two ways callback pattern, reactive patterns
 
+in order to write database code we have two apis
+
+1.JDBCClient - Legacy , you can avoid 
+2.SqlClient API 
+   Sql is abstraction api which provides easy way of querying data from databases
+  JdbcPool Instance to perform SQL operations - INSERT,DELETE,UPDATE,SELECT
+  You can write preparedStatements and callable statements.
+
 1.jdbc dependency
     <dependency>
       <groupId>io.vertx</groupId>
@@ -3183,7 +3191,7 @@ public class JDBCVerticle extends AbstractVerticle {
                 String SELECT_QUERY = "SELECT * FROM user";
                 sqlConnection.query(SELECT_QUERY, tableSelect -> {
                   System.out.println(tableSelect.result().getResults());
-                });
+                });	
               }
             });
           } else {
@@ -3202,6 +3210,94 @@ public class JDBCVerticle extends AbstractVerticle {
     prepareDatabase();
   }
 }
+......................................................................................
+
+JdbPool:
+    JsonObject config = new JsonObject()
+      .put("url", "jdbc:hsqldb:mem:test?shutdown=true")
+      .put("driver_class", "org.hsqldb.jdbcDriver")
+      .put("max_pool_size", 30)
+      .put("user", "SA")
+      .put("password", "");
+    //Pool is ready
+    JDBCPool pool = JDBCPool.pool(vertx, config);
+
+Query Operations:CREATE,INSERT,SELECT,UPDATE,DELETE
+
+pool.query(QUERY)
+.execute()
+.onFailure()
+.onSuccess(rows->{})
+
+pool.preparedQuery("query")
+  .execute(Tuple.of(value))
+  .onFailure()
+  .onSuccess()
+
+package com.amex.http.jdbc;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.jdbc.JDBCClient;
+import io.vertx.jdbcclient.JDBCPool;
+import io.vertx.sqlclient.Row;
+
+public class JDBCPoolVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", JDBCPoolVerticle.class.getName());
+  }
+
+  public void prepareDb() {
+    JsonObject config = new JsonObject()
+      .put("url", "jdbc:hsqldb:mem:test?shutdown=true")
+      .put("driver_class", "org.hsqldb.jdbcDriver")
+      .put("max_pool_size", 30)
+      .put("user", "SA")
+      .put("password", "");
+    //Pool is ready
+    JDBCPool pool = JDBCPool.pool(vertx, config);
+    //create,insert,select
+    pool
+      .query("create table test(id int primary key,name varchar(255))")
+      .execute()
+      .compose(r ->
+        pool.query("insert into test values(1,'subramanian'),(2,'murugan')").execute()
+      ).compose(r -> pool.query("select * from test").execute())
+      .onSuccess(rows -> {
+        for (Row row : rows) {
+          System.out.println(row.toJson());
+        }
+      }).onFailure(System.out::println);
+
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    prepareDb();
+  }
+}
+...................
+
+Use case : 
+CREATE REST API FOR "Products" 
+Product id, product name, product price, product qty
+
+Req:
+Web
+ /api/products - list all products
+ /api/products/id - get one product
+ /api/products -  save
+ /api/products  - update
+ /api/products  - remove
+
+JDBC layer - H2 db, jdbc Pool
+
+
+
+
 
 
 
