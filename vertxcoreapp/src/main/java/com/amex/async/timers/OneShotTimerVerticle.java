@@ -8,13 +8,13 @@ public class OneShotTimerVerticle extends AbstractVerticle {
   public static void main(String[] args) {
     Launcher.executeCommand("run", OneShotTimerVerticle.class.getName());
   }
-
   //simple delay
   public void delay() {
     vertx.setTimer(1000, handler -> {
       System.out.println("I am delayed task");
     });
   }
+
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception {

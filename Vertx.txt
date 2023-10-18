@@ -2228,3 +2228,989 @@ public class JsonVerticle extends AbstractVerticle {
 			Non Blocking Web Applications
 .....................................................................................
 
+HTTP server Application:
+
+1.Vertx Provides webserver, you dont need to deploy vertx apps on Tomcat like container.
+2.Vertx Webserver is fully non blocking, powered with event loop threads
+3.Vertx Webserver is based "Shared Thread Model"
+
+vertx.createHttpServer()...
+
+Steps:
+1.create webserver
+2.write request handler
+3.deploy the code into web server.
+
+Interfaces:
+1.HttpServer
+2.HttpServerRequest
+3.HttpServerResponse
+
+package com.amex.http;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Handler;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.http.HttpServerResponse;
+
+public class SimpleHttpVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", SimpleHttpVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Server
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Your application code: Request and Response handling
+    httpServer.requestHandler(request -> {
+      HttpServerResponse response = request.response();
+      response.end("Hello");
+    });
+    //deploy and start server
+    httpServer.listen(3000, httpServerHandler -> {
+      if (httpServerHandler.succeeded()) {
+        System.out.println("Server is Up @" + httpServerHandler.result().actualPort());
+      } else {
+        System.out.println("Server start up failed " + httpServerHandler.cause().getMessage());
+      }
+    });
+
+  }
+}
+....
+
+Fluent web server:
+
+package com.amex.http;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.http.HttpServerResponse;
+
+public class FluentWebServer extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", FluentWebServer.class.getName());
+  }
+
+  private static void handle(HttpServerRequest request) {
+    request.response().end("Hello!");
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+//    vertx.createHttpServer()
+//      .requestHandler(request -> request.response().end("Hello"))
+//      .listen(3000, handler -> {
+//        System.out.println("Vertx Server is Running!");
+//      });
+
+    vertx.createHttpServer()
+      .requestHandler(FluentWebServer::handle)
+      .listen(3000, handler -> {
+        System.out.println("Vertx Server is Running!");
+      });
+  }
+}
+.....................................................................................
+			  Micro services API development
+.....................................................................................
+
+What is API?
+  Application programming interface
+
+In any software, data is center point, programs talks each other in order to exchange data.
+
+How data is exchanged among or between programs?
+
+ Every program expose "method/function/procedure" to exchange data.
+ "method/function/procedure" is generally called as "API".
+
+ Now a days most of programming languages uses "object oriented model" to design apis
+
+ Object represents collection of "api". Object encapuslate apis....
+ 
+ Object technically called as "End Point".
+
+Types of api based on accessability:
+
+1.Local api
+   apis are communciated within single runtime eg witin single jvm/webserver
+2.Remote api
+  apis are commmunicated outside runtime via networks using network protocals.
+
+When we think about distributed computing so called Microservices, apis are exposed via network only.
+
+RPI: (Remote P
+rocedure Invocation).
+
+We have RPI lot of RPI technology...(api developement)
+
+1.Web services -HTTP 1.1
+   REST
+   SOAP
+   GRAPHQL
+
+2.RPC
+   CORBA
+   RMI
+   DCOM
+   EJB
+   GRPC - Modern RPC Framework -HTTP 2/TCP
+   Websocket -WS
+
+3.MOM 
+   JMS
+   Kakfa
+   RabbitMQ
+   IBMMQ
+
+How to build REST API?
+
+Resource  - Domain Model which is represented by Object having apis
+Resource identifier -URI  ="/api"
+Resource Method - GET,POST,PUT,DELETE - API verbs
+
+package com.amex.http;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpMethod;
+
+public class SimpleHTTPApi extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", SimpleHTTPApi.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    vertx.createHttpServer().requestHandler(request -> {
+      //building rest api -  url and method
+      if (request.uri().equals("/api/users") && request.method() == HttpMethod.GET) {
+        request.response().setStatusCode(200).end("USERS Get");
+      }
+      if (request.uri().equals("/api/users") && request.method() == HttpMethod.POST) {
+        request.response().setStatusCode(200).end("USERS Post");
+      }
+      if (request.uri().equals("/api/users") && request.method() == HttpMethod.PUT) {
+        request.response().setStatusCode(200).end("USERS Put");
+      }
+      if (request.uri().equals("/api/users") && request.method() == HttpMethod.DELETE) {
+        request.response().setStatusCode(200).end("USERS DELETE");
+      }
+    }).listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is Running");
+      } else {
+        System.out.println("Server start up failed");
+      }
+    });
+  }
+}
+
+in order to build rest api we need url and method for each resource, in the above code, we have verified method and url.
+
+The develper has to write all method and resource mapping logic..
+There is no proper  modularity in building apps
+
+Soultion:
+ Vertx provides a small framework/module for abstracting these things vertx-web
+
+Vertx-Web:
+
+Vertx-core provides a fairly low level set of functionality for handling http.
+Vertx web builds on the top of vertx-core to provide a richer set of functionality for building real web applications more easily.
+
+Vertx web is a greate fit for writing RESTfull Http microservices 
+
+
+Features of Vertx-Web:
+.......................
+
+1.Routing (based on method,path,etc)
+2.Regular expression based pattern matching for paths
+3.Extract path parameters from paths.
+4.Content negotiation
+5.Request body handling
+6.Multi part file uploads
+7.Sub Routers
+8.Session Support
+9.CORS handling
+10.Error Page handling
+11.Authentication and authorization using jwt,http,oauth2
+12.Template supports
+etc...
+
+
+Vertx Web Core Features:
+
+1.Router:
+  Router is one of the core concepts vertx-web
+  It is object which maintains zero or more routes("url mappers")
+  Router takes an http request and finds the matching routing for that request
+  Every route has handler which process requests and send response
+
+2.RoutingContext
+   It is container object from which you can get Request and Response Objects
+
+Basic routing:
+package com.amex.http.web;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+
+public class SimpleWebAPI extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", SimpleWebAPI.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Http server
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Request handling logic will be inside router
+    Router router = Router.router(vertx);
+
+    //route handler: Request handler
+    router.route().handler(ctx -> {
+      HttpServerResponse response = ctx.response();
+      response.setStatusCode(200);
+      response.putHeader("content-type", "application/json");
+      JsonObject jsonObject = new JsonObject().put("message", "Hello Vertx");
+      response.end(jsonObject.encodePrettily());
+    });
+    //assign router to request handler
+    httpServer.requestHandler(router);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!");
+      }
+    });
+
+  }
+}
+....................................................................................
+
+Routers:
+
+ URL mapping
+
+Router router = Router.router(vertx);
+
+1.router.route(HTTPMethod.GET,"url").handler(ctx->{})
+2.router.get("url").handler | router.post("url").handler ...
+
+
+package com.amex.http.web;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+
+public class URLMapperWeb extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", URLMapperWeb.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Http server
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Request handling logic will be inside router
+    Router router = Router.router(vertx);
+
+    //Resources: USER resource
+    router.get("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -GET");
+    });
+
+    router.post("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(201).end("USERS -POST");
+
+    });
+    router.put("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -PUT");
+
+    });
+    router.delete("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -DELETE");
+    });
+    //assign router to request handler
+    httpServer.requestHandler(router);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!!");
+      }
+    });
+
+  }
+}
+.....................................................................................				How to read Payload
+.....................................................................................
+
+ctx.getBodyAsJson () method is used to read payload.
+
+package com.amex.http.web;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+
+public class RequestPayload extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", RequestPayload.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Http server
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Request handling logic will be inside router
+    Router router = Router.router(vertx);
+
+    //Resources: USER resource
+    router.get("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -GET");
+    });
+
+    router.post("/api/users").handler(ctx -> {
+      JsonObject payload = ctx.getBodyAsJson();
+      System.out.println(payload.encodePrettily());
+      ctx.response().setStatusCode(201).end("USERS -POST");
+
+    });
+    router.put("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -PUT");
+
+    });
+    router.delete("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -DELETE");
+    });
+    //assign router to request handler
+    httpServer.requestHandler(router);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!!");
+      }
+    });
+
+  }
+}
+
+After running this code , you will get error? or you will will get null?
+
+in order to read json we need to set json parser (middlewares)
+
+middlewares are just code , get initalized before route is handled.
+
+There is middleware called BodyHandler middleware.
+package com.amex.http.web;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.handler.BodyHandler;
+
+public class RequestPayload extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", RequestPayload.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Http server
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Request handling logic will be inside router
+    Router router = Router.router(vertx);
+
+    //initialize the middleware
+    //here we apply middleware for all router
+    router.route().handler(BodyHandler.create());
+
+    //Resources: USER resource
+    router.get("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -GET");
+    });
+
+    router.post("/api/users").handler(ctx -> {
+      //current vertx deprecated this api
+      //JsonObject payload = ctx.getBodyAsJson();
+      //lastest vertx api body
+      JsonObject payload = ctx.body().asJsonObject();
+      System.out.println(payload);
+      ctx.response().setStatusCode(201).end("USERS -POST");
+
+    });
+    router.put("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -PUT");
+
+    });
+    router.delete("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -DELETE");
+    });
+    //assign router to request handler
+    httpServer.requestHandler(router);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!!");
+      }
+    });
+
+  }
+}
+.....................................................................................
+			 Parameters 
+
+1.Path Parameters
+2.Query Parameters
+
+Path Parameters:
+
+Router router = Router.router(vertx);
+router.get('/api/users/:id').handler(ctx)
+String param = ctx.pathParam("id")
+
+package com.amex.http.web;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.handler.BodyHandler;
+
+public class PathParameter extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PathParameter.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Http server
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Request handling logic will be inside router
+    Router router = Router.router(vertx);
+
+    //initialize the middleware
+    //here we apply middleware for all router
+    router.route().handler(BodyHandler.create());
+
+    //Resources: USER resource
+    router.get("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -GET");
+    });
+
+    router.get("/api/users/:id").handler(ctx -> {
+      String id = ctx.pathParam("id");
+      ctx.response().setStatusCode(200).end("USERS -GET" + id);
+    });
+
+    router.post("/api/users").handler(ctx -> {
+      //current vertx deprecated this api
+      //JsonObject payload = ctx.getBodyAsJson();
+      //lastest vertx api body
+      JsonObject payload = ctx.body().asJsonObject();
+      System.out.println(payload);
+      ctx.response().setStatusCode(201).end("USERS -POST");
+
+    });
+    router.put("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -PUT");
+
+    });
+    router.delete("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -DELETE");
+    });
+    //assign router to request handler
+    httpServer.requestHandler(router);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!!");
+      }
+    });
+
+  }
+}
+....................................................................................
+			  Query Parameters
+
+Router router = Router.router(vertx);
+router.get('/api/users/:id').handler(ctx)
+String param = ctx.queryParameter("id")
+package com.amex.http.web;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.handler.BodyHandler;
+
+import java.util.List;
+
+public class QueryParameter extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", QueryParameter.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Http server
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Request handling logic will be inside router
+    Router router = Router.router(vertx);
+
+    //initialize the middleware
+    //here we apply middleware for all router
+    router.route().handler(BodyHandler.create());
+
+    //Resources: USER resource
+    router.get("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -GET");
+    });
+
+    router.get("/api/users/location").handler(ctx -> {
+      System.out.println("location");
+      List<String> city = ctx.queryParam("city");
+      System.out.println(city);
+      city.forEach(System.out::println);
+      ctx.response().setStatusCode(200).end("USERS -GET");
+    });
+    router.get("/api/users/:id").handler(ctx -> {
+      String id = ctx.pathParam("id");
+      ctx.response().setStatusCode(200).end("USERS -GET" + id);
+    });
+
+    router.post("/api/users").handler(ctx -> {
+      //current vertx deprecated this api
+      //JsonObject payload = ctx.getBodyAsJson();
+      //lastest vertx api body
+      JsonObject payload = ctx.body().asJsonObject();
+      System.out.println(payload);
+      ctx.response().setStatusCode(201).end("USERS -POST");
+
+    });
+    router.put("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -PUT");
+
+    });
+    router.delete("/api/users").handler(ctx -> {
+      ctx.response().setStatusCode(200).end("USERS -DELETE");
+    });
+    //assign router to request handler
+    httpServer.requestHandler(router);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!!");
+      }
+    });
+
+  }
+}
+....................................................................................
+			  Resource oriented Routers
+....................................................................................
+
+Domain models
+
+api/users
+api/products
+api/customers
+api/items
+
+What if i have more resources and more routes?
+
+ProductRouter ---- /api/products
+UserRouter -----/api/users
+PaymentRouter ---/api/payments
+
+if you have more than one router , how to bind with request handler
+
+ httpServer.requestHandler(?);
+
+SubRouters and MainRouters
+
+-You can have more subRouters - products,users etc..
+-You can have only one main or app router- appRouter
+-requestHandler takes appRouter
+->Inside App Router we have to configure subrouters
+ 
+How to bind /mount/connect app router with subrouter?
+
+Router router = Router.router(vertx);
+
+router.mountSubRouter() - old one
+
+appRouter.route("/api/users/*").subRouter(userRouter) ; - new One
+
+Rules:
+1.The route path must end with a wild card "/*"
+2.Parameters are allowed but full regex pattern not
+3.Only one handler can be registered.
+2.Only one router per path object
+
+Full code:
+package com.amex.http.web.subrouters;
+
+import com.amex.http.web.PathParameter;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
+import io.vertx.ext.web.handler.BodyHandler;
+
+public class ResourceRouters extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", ResourceRouters.class.getName());
+  }
+
+  //router class : inner classes
+  private static class UserRouter {
+    //CURD operations
+    public static void create(RoutingContext ctx) {
+      JsonObject user = ctx.body().asJsonObject();
+      System.out.println(user.encodePrettily());
+      ctx.response().setStatusCode(201).end("User saved");
+    }
+
+    public static void list(RoutingContext ctx) {
+      ctx.response().setStatusCode(200).end("User List");
+    }
+  }
+
+  private static class ProductRouter {
+    //CURD operations
+    public static void create(RoutingContext ctx) {
+      JsonObject user = ctx.body().asJsonObject();
+      System.out.println(user.encodePrettily());
+      ctx.response().setStatusCode(201).end("Product saved");
+    }
+
+    public static void list(RoutingContext ctx) {
+      ctx.response().setStatusCode(200).end("Product List");
+    }
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Create Http server
+    HttpServer httpServer = vertx.createHttpServer();
+    //Request handling logic will be inside router
+    //create sub routers
+    Router userRouter = Router.router(vertx);
+    Router productRouter = Router.router(vertx);
+    Router customerRouter = Router.router(vertx);
+    //appRouter
+    Router appRouter = Router.router(vertx);
+    //initialize the middleware
+    //here we apply middleware for all router
+    appRouter.route().handler(BodyHandler.create());
+
+
+    //URL Patterns
+    //http://localhost:3000/api/users/list
+    userRouter.get("/list").handler(UserRouter::list);
+    userRouter.post("/save").handler(UserRouter::create);
+
+    //Products
+    productRouter.get("/list").handler(ProductRouter::list);
+    productRouter.post("/save").handler(ProductRouter::create);
+
+
+    //appRouter with subRouter binding
+    //old api: depricated api
+//     appRouter.mountSubRouter("/api/users", userRouter);
+    //new api
+    appRouter.route("/api/users/*").subRouter(userRouter);
+    //appRouter.mountSubRouter("/api/products", productRouter);
+    appRouter.route("/api/products/*").subRouter(productRouter);
+
+    //assign router to request handler
+    httpServer.requestHandler(appRouter);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!!");
+      } else {
+
+      }
+    });
+
+  }
+}
+....................................................................................
+			  Exception Handling
+.....................................................................................
+
+if some thing went wront how to handle exception and how to send error message to clients.
+
+router.failureHandler(handler->{
+   send error data to client and tools
+})
+
+package com.amex.http.web;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+
+public class ExceptionHandlingVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", ExceptionHandlingVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    Router userRouter = Router.router(vertx);
+    Router appRouter = Router.router(vertx);
+    HttpServer httpServer = vertx.createHttpServer();
+
+    appRouter.route("/api/users/*").subRouter(userRouter);
+
+
+    userRouter.get("/list/:name").handler(ctx -> {
+      String name = ctx.pathParam("name");
+      if (name.equals("admin")) {
+        ctx.response().end("You are valid user");
+      } else {
+        throw new RuntimeException("invalid user");
+      }
+    }).failureHandler(ctx -> {
+      int statusCode = ctx.statusCode();
+      String message = ctx.failure().getMessage();
+      JsonObject errorMessages = new JsonObject().put("code", statusCode).put("message", message);
+      ctx.response().setStatusCode(statusCode).end(errorMessages.encodePrettily());
+    });
+    //assign router to request handler
+    httpServer.requestHandler(appRouter);
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!!");
+      } else {
+
+      }
+    });
+  }
+}
+
+Handlers Types:
+
+1.router.handler() - async request handling
+2.router.failureHandler() - async exception /error handler
+
+Global Handlers
+BodyHandler -  Converts jsonString to jsonObject
+TimeoutHandler  - to Request timeout for given url or global
+blockingHandlier - for writing blocking code...
+....................................................................................
+			 Vertx  and Datasources
+.....................................................................................
+
+Vertx supports nonblocking database access..
+Vertx Provides nonblocking drivers to communicate with relational and nosql databases..
+
+1.JDBC Client
+2.PostgreSQL
+3.MySQL
+4.DB2
+5.Mongodb
+6.Redis
+7.Cassandra 
+
+JDBC Client:
+
+=>JDBC is a technolgy through which you can talk to relational database.
+=>As of now JPA ,hibernate ORM is not supported by vertx.
+=>JDBC code you can write in two ways callback pattern, reactive patterns
+
+1.jdbc dependency
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-jdbc-client</artifactId>
+    </dependency>
+
+database driver dependency
+
+<dependency>
+    <groupId>org.hsqldb</groupId>
+    <artifactId>hsqldb</artifactId>
+    <version>2.3.2</version>
+ </dependency>
+
+
+
+2.Configuring connections
+   JsonObject connectionInfo = new JsonObject()
+      .put("url", "jdbc:hsqldb:mem:test?shutdown=true")
+      .put("driver_class", "org.hsqldb.jdbcDriver")
+      .put("max_pool_size", 30)
+      .put("user", "SA")
+      .put("password", "");
+
+ JDBCClient client= JDBCClient.createShared(vertx, connectionInfo);
+
+3.You have to use callback chain pattern.
+    connection success
+            |
+            do sql operations
+   else 
+    throw erro
+   client.getConnection(connection->{
+        if(connection.succeeded(){
+
+         }
+   })
+			
+3.Get sqlConnection instance
+
+ client.getConnection(connection->{
+        if(connection.succeeded(){
+	final SQLConnecton con=connection.result()
+         }
+   })
+
+4. You can execute Query
+
+ client.getConnection(connection->{
+        if(connection.succeeded(){
+	final SQLConnecton con=connection.result()
+	  con.execute(sql,handler())
+         }
+   })
+
+Callback Based JDBC code using JDBCClient API
+package com.amex.http.jdbc;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.jdbc.JDBCClient;
+import io.vertx.ext.sql.SQLConnection;
+import jdk.jshell.ImportSnippet;
+
+public class JDBCVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", JDBCVerticle.class.getName());
+  }
+
+  public void prepareDatabase() {
+    JsonObject connectionInfo = new JsonObject()
+      .put("url", "jdbc:hsqldb:mem:test?shutdown=true")
+      .put("driver_class", "org.hsqldb.jdbcDriver")
+      .put("max_pool_size", 30)
+      .put("user", "SA")
+      .put("password", "");
+
+    JDBCClient jdbcClient = JDBCClient.createShared(vertx, connectionInfo);
+    jdbcClient.getConnection(connection -> {
+      if (connection.succeeded()) {
+        System.out.println("connection success");
+        SQLConnection sqlConnection = connection.result();
+        //table creation
+        String CREATE_TABLE = "CREATE TABLE user(id int primary key, name varchar(255))";
+        sqlConnection.execute(CREATE_TABLE, tableCreate -> {
+          if (tableCreate.succeeded()) {
+            System.out.println("table is created");
+            String INSERT_QUERY = "INSERT INTO user VALUES(1,'subramanian')";
+            sqlConnection.execute(INSERT_QUERY, tableInsert -> {
+              if (tableInsert.failed()) {
+                System.out.println(tableInsert.cause().getMessage());
+              } else {
+                String SELECT_QUERY = "SELECT * FROM user";
+                sqlConnection.query(SELECT_QUERY, tableSelect -> {
+                  System.out.println(tableSelect.result().getResults());
+                });
+              }
+            });
+          } else {
+            System.out.println("Table not created" + tableCreate.cause().getMessage());
+          }
+        });
+      } else {
+        System.out.println("Connection failed" + connection.cause().getMessage());
+      }
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    prepareDatabase();
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
