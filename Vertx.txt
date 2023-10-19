@@ -3670,6 +3670,561 @@ How to requests without any body.
 client.get(port,url,"uri").send().onSuccess().onFailure()
 
 
+package com.amex.distributed.webclient;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.client.HttpRequest;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.ext.web.handler.BodyHandler;
+
+class HelloVerticle extends AbstractVerticle {
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    Router router = Router.router(vertx);
+    router.route().handler(BodyHandler.create());
+
+    router.get("/api/hello").handler(ctx -> {
+      ctx.response().end("Hello");
+    });
+    vertx.createHttpServer().requestHandler(router).listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Provider Server is running");
+      }
+    });
+
+  }
+}
+
+class GreeterVerticle extends AbstractVerticle {
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    Router router = Router.router(vertx);
+    router.route().handler(BodyHandler.create());
+    WebClient webClient = WebClient.create(vertx);
+    router.get("/api/greet").handler(ctx -> {
+      //communicate with HelloRest verticle
+      HttpRequest<Buffer> httpRequest = webClient.get(3000, "localhost", "/api/hello");
+      httpRequest.send().onSuccess(response -> {
+        ctx.response().end(response.body().toString());
+      });
+    });
+    router.get("/api/posts").handler(ctx -> {
+      HttpRequest<Buffer> httpRequest = webClient.
+        getAbs("https://jsonplaceholder.typicode.com/posts");
+      httpRequest.send().onSuccess(posts -> {
+        ctx.response()
+          .setStatusCode(200)
+          .putHeader("content-type", "application/json")
+          .end(posts.bodyAsJsonArray().encodePrettily());
+      }).onFailure(err -> {
+      });
+    });
+    vertx.createHttpServer().requestHandler(router).listen(3001, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Consumer Server is running");
+      }
+    });
+
+  }
+}
+
+public class WebClientVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", WebClientVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    vertx.deployVerticle(new HelloVerticle());
+    vertx.deployVerticle(new GreeterVerticle());
+  }
+}
+.....................................................................................
+			Vertx  Threading Model
+....................................................................................
+Vertx Threading Models:
+.......................
+
+Vertx provides basically provides two types threads
+
+1.Non blocking threads called "event loop threads"
+   These are used to run non blocking io opertions
+   By default the vertx uses per cpu core 2 threads.
+   Works are distributed among threads based on "round robin algorthim".
+
+2.Woker Pool threads
+    In vertx what if i want to write some blocking code.
+  Thsese threads can be used.
+
+
+What can be a blocking code?
+
+-Thread.sleep
+-long running task
+-legacy database calls like hibernate/jpa calls
+-legacy network calls
+etc....
+
+What if i write blocking code with in nonblocking context..if you try to run blocking code within event loop thread.
+
+Every Verticle by default is bound with "Event Loop thread".
+
+Use case 1: How to get event loop thread information.
+package com.amex.threading;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+public class EventLoopThreadInfo extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", EventLoopThreadInfo.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println("Current Thread + " + Thread.currentThread().getName());
+  }
+}
+
+output:
+Current Thread + vert.x-eventloop-thread-1
+....................................................................................
+			 Round Robin and Event loop threads
+....................................................................................
+
+package com.amex.threading;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+class HelloVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println(HelloVerticle.class.getName() + " is  Running on " + Thread.currentThread().getName());
+  }
+}
+
+public class RoundRobinThreadInfo extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", RoundRobinThreadInfo.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println("Current Thread + " + Thread.currentThread().getName());
+    for (int i = 0; i < 27; i++) {
+      vertx.deployVerticle(new HelloVerticle());
+    }
+  }
+}
+
+outPut:
+Current Thread + vert.x-eventloop-thread-1
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-7
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-8
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-4
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-19
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-5
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-17
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-15
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-14
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-11
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-12
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-3
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-0
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-23
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-20
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-6
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-16
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-18
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-21
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-10
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-9
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-13
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-22
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-2
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-4
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-1
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-3
+com.amex.threading.HelloVerticle is  Running on vert.x-eventloop-thread-2
+
+.....................................................................................
+			Use case 2: Blocking and Nonblocking threads
+....................................................................................
+
+Thread.sleep :
+..............
+package com.amex.threading.blocking;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+class HelloVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Thread sleep is going to block thread
+    System.out.println("Hello Verticle is Running  " + Thread.currentThread().getName());
+    Thread.sleep(1000);
+    System.out.println("Hello, I am delayed Message");
+  }
+}
+
+public class BlockingVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", BlockingVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println("Main Thread + " + Thread.currentThread().getName());
+    vertx.deployVerticle(new HelloVerticle());
+
+  }
+}
+
+Output:
+Main Thread + vert.x-eventloop-thread-1
+Hello Verticle is Running  vert.x-eventloop-thread-2
+Oct 19, 2023 12:13:38 PM io.vertx.core.impl.launcher.commands.VertxIsolatedDeployer
+INFO: Succeeded in deploying verticle
+Hello, I am delayed Message
+
+Now i increase the time.
+
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+class HelloVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Thread sleep is going to block thread
+    System.out.println("Hello Verticle is Running  " + Thread.currentThread().getName());
+    Thread.sleep(5000);
+    System.out.println("Hello, I am delayed Message");
+  }
+}
+
+public class BlockingVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", BlockingVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println("Main Thread + " + Thread.currentThread().getName());
+    vertx.deployVerticle(new HelloVerticle());
+
+  }
+}
+
+Main Thread + vert.x-eventloop-thread-1
+Hello Verticle is Running  vert.x-eventloop-thread-2
+Oct 19, 2023 12:14:07 PM io.vertx.core.impl.launcher.commands.VertxIsolatedDeployer
+INFO: Succeeded in deploying verticle
+Oct 19, 2023 12:14:10 PM io.vertx.core.impl.BlockedThreadChecker
+WARNING: Thread Thread[vert.x-eventloop-thread-2,5,main] has been blocked for 2791 ms, time limit is 2000 ms
+Oct 19, 2023 12:14:11 PM io.vertx.core.impl.BlockedThreadChecker
+WARNING: Thread Thread[vert.x-eventloop-thread-2,5,main] has been blocked for 3794 ms, time limit is 2000 ms
+Oct 19, 2023 12:14:12 PM io.vertx.core.impl.BlockedThreadChecker
+WARNING: Thread Thread[vert.x-eventloop-thread-2,5,main] has been blocked for 4795 ms, time limit is 2000 ms
+Hello, I am delayed Message
+
+Still increase Time;
+Main Thread + vert.x-eventloop-thread-1
+Hello Verticle is Running  vert.x-eventloop-thread-2
+Oct 19, 2023 12:15:25 PM io.vertx.core.impl.launcher.commands.VertxIsolatedDeployer
+INFO: Succeeded in deploying verticle
+Oct 19, 2023 12:15:28 PM io.vertx.core.impl.BlockedThreadChecker
+WARNING: Thread Thread[vert.x-eventloop-thread-2,5,main] has been blocked for 2795 ms, time limit is 2000 ms
+Oct 19, 2023 12:15:29 PM io.vertx.core.impl.BlockedThreadChecker
+WARNING: Thread Thread[vert.x-eventloop-thread-2,5,main] has been blocked for 3795 ms, time limit is 2000 ms
+Oct 19, 2023 12:15:30 PM io.vertx.core.impl.BlockedThreadChecker
+WARNING: Thread Thread[vert.x-eventloop-thread-2,5,main] has been blocked for 4796 ms, time limit is 2000 ms
+Oct 19, 2023 12:15:31 PM io.vertx.core.impl.BlockedThreadChecker
+WARNING: Thread Thread[vert.x-eventloop-thread-2,5,main] has been blocked for 5797 ms, time limit is 2000 ms
+io.vertx.core.VertxException: Thread blocked
+	at java.base@17.0.7/java.lang.Thread.sleep(Native Method)
+	at app//com.amex.threading.blocking.HelloVerticle.start(BlockingVerticle.java:13)
+	at app//io.vertx.core.impl.DeploymentManager.lambda$doDeploy$5(DeploymentManager.java:195)
+	at app//io.vertx.core.impl.DeploymentManager$$Lambda$112/0x0000000800cbfa08.handle(Unknown Source)
+	at app//io.vertx.core.impl.ContextInternal.dispatch(ContextInternal.java:277)
+
+
+Now you cant block any event loop thread beyond 2000ms which is default timeout. if you do so, it gives warning first, then throws Exception VertxException(Thread Blocked)
+
+
+What if i want to run blocking code within the context of non blocking?
+
+
+There are two types of solution
+
+1.Convert the Eventloop thread verticles into "Worker Verticle".
+2.I dont want the entire verticle to be part of "Worker Verticle Threads", i want only few apis/code to be isloated into separte worker pool thread.
+
+
+Types of Verticles:
+
+1.Standard Verticle
+   Verticles are executed by event loop threads, which is normal and regular verticles
+2.Worker Verticle
+   Verticles are special executed by separate threadof execution called "worker pool threads"
+
+
+How to create worker verticle?
+
+in order to create worker verticle, we need to understand "Vertx Configuration System"
+
+In Vertx We have so many Configuration Objects
+
+1.HTTP
+   HttpServerOptions
+
+ HttpServerOptions serverOptions = new HttpServerOptions().setPort(3000).setHost("localhost");
+ HttpServer createHttpServer(serverOptions);
+
+2.Event Bus
+  DeliverOptions options = new DeliveryOptions().addHeader("myheader","value")
+   vertx.eventBus().send("hello",options);
+
+3.Verticle Configuration
+   DeployementOptions options = new DeploymentOptions().setWorker(true)
+   vertx.deployVerticle("verticle",options)   
+
+4.Vertx Configuration
+   Vertx engine configuration
+  VertxOptions
+
+
+Worker Verticle:
+package com.amex.threading.blocking;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+class DelayVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println(DelayVerticle.class.getName() + " is running on " + Thread.currentThread().getName());
+    try {
+      Thread.sleep(10000);
+      System.out.println("I am delayed Message");
+    } catch (Exception e) {
+
+    }
+  }
+}
+
+public class WorkerVerticleMain extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", WorkerVerticleMain.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //worker Verticle
+    DeploymentOptions options = new DeploymentOptions().setWorker(true);
+    vertx.deployVerticle(new DelayVerticle(), options);
+  }
+}
+..........................................................................................
+			 Method running within Blocking Context
+
+package com.amex.threading.blocking;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+
+class DelayVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println(DelayVerticle.class.getName() + " is running on " + Thread.currentThread().getName());
+    try {
+      Thread.sleep(10000);
+      System.out.println("I am delayed Message");
+    } catch (Exception e) {
+
+    }
+  }
+}
+
+class GreeterVerticle extends AbstractVerticle {
+
+  //run only this code in a separate thread of execution
+  private void sayHello(Promise<Void> promise) {
+    try {
+      System.out.println("sayHello method " + " is running on " + Thread.currentThread().getName());
+
+      Thread.sleep(10000);
+      System.out.println("Hello from sayHello");
+      promise.complete();
+    } catch (Exception e) {
+      promise.fail("something went wrong");
+    }
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println(GreeterVerticle.class.getName() + " is running on " + Thread.currentThread().getName());
+    vertx.executeBlocking(this::sayHello);
+  }
+}
+
+public class WorkerVerticleMain extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", WorkerVerticleMain.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //worker Verticle
+    DeploymentOptions options = new DeploymentOptions().setWorker(true);
+    vertx.deployVerticle(new DelayVerticle(), options);
+    vertx.deployVerticle(new GreeterVerticle());
+
+  }
+}
+.............................................................................................
+		How to exchange data between Blocking and nonblocking
+			 How to write router and blocking code.
+
+router.handler() - non blocking router
+router.blockingHandler - blocking router means that you write/invoke blocking code.
+
+Note:
+ Dont Block Event Loop thread if you do so, you will not get the benefit of Nonblocking arch...
+
+package com.amex.threading.blocking;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+
+class DelayVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println(DelayVerticle.class.getName() + " is running on " + Thread.currentThread().getName());
+    try {
+      Thread.sleep(10000);
+      System.out.println("I am delayed Message");
+    } catch (Exception e) {
+
+    }
+  }
+}
+
+class GreeterVerticle extends AbstractVerticle {
+
+  //run only this code in a separate thread of execution
+  private void sayHello(Promise<Void> promise) {
+    try {
+      System.out.println("sayHello method " + " is running on " + Thread.currentThread().getName());
+
+      Thread.sleep(10000);
+      System.out.println("Hello from sayHello");
+      promise.complete();
+    } catch (Exception e) {
+      promise.fail("something went wrong");
+    }
+  }
+
+  public void findAll(Promise<JsonObject> promise) {
+    System.out.println("findAll is running " + Thread.currentThread().getName());
+    try {
+      Thread.sleep(5000);
+      promise.complete(new JsonObject().put("message", "Hello"));
+    } catch (Exception es) {
+    }
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    System.out.println(GreeterVerticle.class.getName() + " is running on " + Thread.currentThread().getName());
+    vertx.executeBlocking(this::sayHello);
+    vertx.executeBlocking(this::findAll).onSuccess(res -> {
+      System.out.println("Got " + res.encodePrettily());
+    });
+    //get data from the blocking api
+    //router with blocking :
+    Router router = Router.router(vertx);
+    //
+    router.get("/api/blocking").blockingHandler(rc -> {
+      System.out.println("findAll is running " + Thread.currentThread().getName());
+      try {
+        Thread.sleep(5000);
+        rc.response().end(new JsonObject().put("message", "Hello").encodePrettily());
+      } catch (Exception es) {
+      }
+    });
+    vertx.createHttpServer().requestHandler(router).listen(3000, ar -> {
+      if (ar.succeeded()) {
+        System.out.println("Server is Running");
+      }
+    });
+
+    vertx.createHttpServer().requestHandler(router).listen(3000, ar -> {
+      if (ar.succeeded()) {
+        System.out.println("Server is Running");
+      }
+    });
+  }
+}
+
+public class WorkerVerticleMain extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", WorkerVerticleMain.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //worker Verticle
+    DeploymentOptions options = new DeploymentOptions().setWorker(true);
+    vertx.deployVerticle(new DelayVerticle(), options);
+    vertx.deployVerticle(new GreeterVerticle());
+
+  }
+}
+.............................................................................................
+			 Microservices  - Configuration
+...........................................................................................
+
+
+
 
 
 
