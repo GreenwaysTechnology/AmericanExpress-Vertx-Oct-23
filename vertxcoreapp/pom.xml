@@ -48,6 +48,10 @@
       <groupId>io.vertx</groupId>
       <artifactId>vertx-jdbc-client</artifactId>
     </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-web-client</artifactId>
+    </dependency>
     <!-- https://mvnrepository.com/artifact/org.hsqldb/hsqldb -->
     <dependency>
       <groupId>org.hsqldb</groupId>

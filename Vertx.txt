@@ -3294,6 +3294,381 @@ Web
  /api/products  - remove
 
 JDBC layer - H2 db, jdbc Pool
+.....................................................................................
+		   Microservices - Service Communications
+.....................................................................................
+
+Communication patterns:
+1.with in process (within JVM) (Within Vertx Engine)
+2.Across Process (Across JVM) (Across Vertx Engine) - Clustered Vertx
+
+Communication styles:
+ Communication between two services can be sync or async.
+ Vertx is based on async communication
+
+Communcations implementation
+
+1.HTTP Based communication 
+   WebClient api
+2.Actor Model communication
+  Event Bus
+
+Event Bus:
+-Event Bus is nerve of vertx systems.
+
+-Vertx By default is distributed
+
+-Vertx carries distributed architecture by default
+
+-In Vertx Verticles can communicate via Centraized Broker which is built in called event Bus.
+-Event Bus uses tcp transport layer by default
+-EventBus can send and recive data in the form of json and buffer
+
+How verticle has been designed to adopt this architecture?
+
+Verticle follows a design pattern  "Actor-like Model" ---->Actor Model design pattern
+
+Event Bus:
+
+1.Event Bus can allow verticles sends data from one place to another place
+2.Event Bus forms a distributed peer-to-peer messaging system spannining multiple server nodes   and multiple browers.
+3.Event bus allows sending messages in three ways
+  1.pub/sub : one to many
+  2.point-to-point : one to one
+  3.request-reply(reponse) - one to one with acknowlegement.
+
+4.Event bus identifies clients via "addressing"
+   Messages are sent on the event bus to an "address"
+   Address schemes can be any naming convention, recommendation is dns model   "in.news.covid"
+   
+5.Handlers
+   Since vertx is non blocking, messages are processed by handlers.
+   You have to register a handler at an address
+
+6.Type of Data
+   Data type of message could be any primitive-int,char,boolean,String, Buffer,JSON
+
+   Per Vertx Engine only One Event Bus-singleTon
+
+How to create Event Bus Object?
+
+ EventBus eb = vertx.eventBus();
+
+ //send message - publisher
+    pub-sub
+    point-point
+    request-reply
+
+ //listen message -listener
+
+  eb.consumer('address',handler->{})
+....................................................................................
+			PUB-SUB
+.....................................................................................
+
+One Publisher and Many Subscriber.
+
+if one publisher publishes messages, many subscribers get the same message at same time.
+package com.amex.distributed.eventbus.pubsub;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.MessageConsumer;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+
+//Address
+class Address {
+  public static String PUB_SUB_ADDRESS = "news.in.covid";
+}
+//Publisher Verticle
+
+//publisher publish news to all news tv channels
+class PublisherVerticle extends AbstractVerticle {
+//  EventBus eventBus = vertx.eventBus();
+
+  public void publish() {
+    //Get EventBus Object reference
+    EventBus eventBus = vertx.eventBus();
+    String message = "Last 24 Hrs covid count is 80000";
+    //send message with timer
+//    vertx.setTimer(1000, ar -> {
+//      eventBus.publish(Address.PUB_SUB_ADDRESS, message);
+//    });
+    HttpServer httpServer = vertx.createHttpServer();
+
+    //Request handling logic will be inside router
+    Router router = Router.router(vertx);
+
+    //route handler: Request handler
+    router.route().handler(ctx -> {
+      HttpServerResponse response = ctx.response();
+      response.setStatusCode(200);
+      eventBus.publish(Address.PUB_SUB_ADDRESS, message);
+      response.end(message + "has been published");
+    });
+    //assign router to request handler
+    httpServer.requestHandler(router);
+
+    //start server
+    httpServer.listen(3000, handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Vertx Server is running!");
+      }
+    });
+
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    publish();
+  }
+}
+
+//subscribers
+class NewsSevenVerticle extends AbstractVerticle {
+  public void consume() {
+    EventBus eventBus = vertx.eventBus();
+    MessageConsumer<String> messageConsumer = eventBus.consumer(Address.PUB_SUB_ADDRESS);
+    messageConsumer.handler(news -> {
+      System.out.println(this.getClass().getName() + news.body());
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start();
+    consume();
+  }
+}
+
+class BBCVerticle extends AbstractVerticle {
+  public void consume() {
+    EventBus eventBus = vertx.eventBus();
+    MessageConsumer<String> messageConsumer = eventBus.consumer(Address.PUB_SUB_ADDRESS);
+    messageConsumer.handler(news -> {
+      System.out.println(this.getClass().getName() + news.body());
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start();
+    consume();
+  }
+}
+
+class NDTVVerticle extends AbstractVerticle {
+  public void consume() {
+    EventBus eventBus = vertx.eventBus();
+    MessageConsumer<String> messageConsumer = eventBus.consumer(Address.PUB_SUB_ADDRESS);
+    messageConsumer.handler(news -> {
+      System.out.println(this.getClass().getName() + news.body());
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start();
+    consume();
+  }
+}
+
+
+//Subscriber verticles
+
+public class PubSubVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PubSubVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    vertx.deployVerticle(new PublisherVerticle());
+    vertx.deployVerticle(new NewsSevenVerticle());
+    vertx.deployVerticle(new BBCVerticle());
+    vertx.deployVerticle(new NDTVVerticle());
+  }
+}
+.....................................................................................
+			 Point To Point
+.....................................................................................
+One to One 
+package com.amex.distributed.eventbus.pointtopoint;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.MessageConsumer;
+
+
+class Address {
+  public static String POINT_TO_POINT = "covid.fin.request";
+}
+
+//publisher
+class FinanceRequestVerticle extends AbstractVerticle {
+  public void requestFinance() {
+    System.out.println("Finance Request started....");
+    vertx.setTimer(5000, ar -> {
+      //point to point : send method
+      String message = "Dear Team, We request that we want 1 Billion $  for Covid recovery fund";
+      //point to point ; send
+      vertx.eventBus().send(Address.POINT_TO_POINT, message);
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start();
+    requestFinance();
+  }
+}
+
+//consumer
+
+class CenertalFinanceVerticle extends AbstractVerticle {
+
+  public void consume() {
+    EventBus eventBus = vertx.eventBus();
+    MessageConsumer<String> messageConsumer = eventBus.consumer(Address.POINT_TO_POINT);
+    //handle /process the message/news
+    messageConsumer.handler(news -> {
+      System.out.println("Request   : " + news.body());
+    });
+  }
+
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start();
+    consume();
+  }
+}
+
+
+public class PointToPointVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", PointToPointVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    vertx.deployVerticle(new FinanceRequestVerticle());
+    vertx.deployVerticle(new CenertalFinanceVerticle());
+
+  }
+}
+.....................................................................................
+			 Request-Reply
+....................................................................................
+
+One to One with Ack.
+package com.amex.distributed.eventbus.requestreply;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.MessageConsumer;
+
+
+class Address {
+  public static String REQUEST_REPLY = "covid.lab.report";
+}
+
+
+class ReportVerticle extends AbstractVerticle {
+
+  public void sendReport() {
+    vertx.setTimer(5000, ar -> {
+      String message = "Report of Mr.x";
+      vertx.eventBus().request(Address.REQUEST_REPLY, message, asyncResult -> {
+        if (asyncResult.succeeded()) {
+          System.out.println(asyncResult.result().body());
+        } else {
+          System.out.println(asyncResult.cause());
+        }
+      });
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    sendReport();
+  }
+}
+
+class LabVerticle extends AbstractVerticle {
+  public void consume() {
+    EventBus eventBus = vertx.eventBus();
+    //pub-sub
+    MessageConsumer<String> messageConsumer = eventBus.consumer(Address.REQUEST_REPLY);
+    //handle /process the message/news
+    messageConsumer.handler(news -> {
+      System.out.println("Request -  : " + news.body());
+      //sending reply /ack
+      news.reply("Patient is Critical, Need More attention");
+    });
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    consume();
+  }
+}
+
+
+public class RequestReplyVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", RequestReplyVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    vertx.deployVerticle(new ReportVerticle());
+    vertx.deployVerticle(new LabVerticle());
+  }
+}
+...................................................................................
+		 HTTP Communication - WebClient
+...................................................................................
+Vertx-WebClient:
+................
+
+Verx-Web Client is async http 1.1 and HTTP/2 Client.
+
+ <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-web-client</artifactId>
+ </dependency>
+How to begin?
+
+Create webclient object.
+
+WebClient client = WebClient.create(vertx);
+If you want to pass any configuration
+
+WebClientOptions options=new WebClientOptions().setKeepAlive(true);
+
+WebClient client = WebClient.create(vertx,options);
+
+
+How to requests without any body.
+
+client.get(port,url,"uri").send().onSuccess().onFailure()
+
 
 
 
