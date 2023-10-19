@@ -4221,16 +4221,457 @@ public class WorkerVerticleMain extends AbstractVerticle {
 }
 .............................................................................................
 			 Microservices  - Configuration
-...........................................................................................
+............................................................................................
+
+Vertx-Configuration
+ The vertx-config module provides configuration stores through which you can store application settings.
+
+Concepts:
+
+Configuration Storage:
+......................
+
+ Where the config information stored.
+
+1.Files
+2.Directories- ldap
+3.http servers 
+4.Redis
+5.System Properties
+6.enviroment properties
+7.InMemory -Part of the application.
+
+
+Steps:
+1.    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-config</artifactId>
+    </dependency>
+
+2.ConfigRetriever Object holds Configuration information.
+ ConfigRetriever retriver = ConfigRetriever.create(vertx);
+
+By default ConfigRetriver is going load config data from the following order
+
+1.The Vertx verticle config() - 1
+2.The system properties  -2
+3.Environment variables - 3
+4.conf/config.json - 4
+
+Configuration information is available as json.
+
+It supports config file formats like yaml, json,properties
+
+Verticle 
+  -can read config data from vertx context object/deployment options
+  -can read config data from the file via command line args
+  -can read from any storage via vertx-config module 
+
+
+Use case : verticles and configuration.
+
+package com.amex.config;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
+
+class GreeterVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //get config data
+    JsonObject config = config();
+    String message = config.getString("message", "default");
+    int port = config.getInteger("port", 8080);
+    vertx.createHttpServer().requestHandler(re -> {
+      re.response().end(message);
+    }).listen(port);
+
+  }
+}
+
+public class ConfigMainVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", ConfigMainVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //config object
+    JsonObject config = new JsonObject().put("message", "Hello Config").put("port", 3000);
+    DeploymentOptions options = new DeploymentOptions().setConfig(config);
+    vertx.deployVerticle(new GreeterVerticle(), options);
+  }
+}
+.............................................................................................
+			Config from the Configuration system
+.............................................................................................
+
+How to read configuration from external configuration system.
+ 
+Configuration system could be file,dir,git......
+
+
+1.ConfigRetriever:
+
+  It configures a set of configuration store, where Configuration store defines  a location 
+  from where the configuration data is read and also format(JSON by default).
+
+ The Result from ConfigRetriever is JSON object.
+
+Flow
+
+  Application ------------------|ConfigRetriver----||ConfigStore
+				JSON Object	<----	
+
+
+How to instantiate the ConfigRetriver:
+
+ ConfigRetriver retriver = ConfigRetriver.create(vertx).
+
+Steps:
+
+1.Add Dependency.
+
+<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-config</artifactId>
+</dependency>
+
+2.create resources/conf/config.json file
+
+{
+  "appname": "Vertx Application",
+  "version": "1.0.0"
+}
+
+3.set storage options
+   ConfigStoreOptions options = new ConfigStoreOptions();
+    options.setType("file");
+    options.setFormat("json");
+    options.setConfig(new JsonObject().put("path", "conf/config.json"));
+
+4.Create ConfigReteriver
+
+    ConfigRetriever retriever = ConfigRetriever.create(vertx, new ConfigRetrieverOptions().addStore(options));
+retriever.getConfig().onComplete()
+
+eg:
+package com.amex.config;
+
+import io.vertx.config.ConfigRetriever;
+import io.vertx.config.ConfigRetrieverOptions;
+import io.vertx.config.ConfigStoreOptions;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
+
+class GreeterVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //get config data
+    JsonObject config = config();
+    String message = config.getString("message", "default");
+    int port = config.getInteger("port", 8080);
+    vertx.createHttpServer().requestHandler(re -> {
+      re.response().end(message);
+    }).listen(port);
+
+  }
+}
+
+class ConfigFileRetriverVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+
+    //Store Configuration
+    ConfigStoreOptions fileStoreOptions = new ConfigStoreOptions();
+    fileStoreOptions.setType("file");
+    fileStoreOptions.setFormat("json");
+    fileStoreOptions.setConfig(new JsonObject().put("path", "conf/config.json"));
+
+    //Retriver Otions
+    ConfigRetrieverOptions configRetrieverOptions = new ConfigRetrieverOptions().addStore(fileStoreOptions);
+
+    //ConfigRetriver
+    ConfigRetriever retriever = ConfigRetriever.create(vertx, configRetrieverOptions);
+
+    retriever.getConfig().onSuccess(config -> {
+      System.out.println(config.encodePrettily());
+      vertx.createHttpServer().requestHandler(res -> {
+        res.response().end(config.encodePrettily());
+      }).listen(config.getInteger("port", 3003));
+    }).onFailure(err -> {
+      System.out.println(err.getMessage());
+    });
+  }
+}
+
+public class ConfigMainVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", ConfigMainVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //config object
+    JsonObject config = new JsonObject().put("message", "Hello Config").put("port", 3000);
+    DeploymentOptions options = new DeploymentOptions().setConfig(config);
+    vertx.deployVerticle(new GreeterVerticle(), options);
+    vertx.deployVerticle(new ConfigFileRetriverVerticle());
+  }
+}
+..............................................................................................
+			 Microservices -Service Discovery and Registry
+.............................................................................................
+What is service?
+ Object
+
+What is registry?
+ Centeralized database
+
+What is database?
+ We store something and later we reterive.
+
+What is discovery?
+  Discovery is nothing but "lookup/search" something from the registry.
+
+Why Service Registry?
+
+  "Keeping Global shared information" across the distributed apps(micro service apps)
+
+
+Service Registry stores "Resources" so that other services in the application can access.
 
 
 
+What we can store inside Registry Server in vertx?
+
+ Resources:
+
+Types of Resources(Services):
+.............................
+
+The services you can register into registry
+
+HTTP Endpoint -HttpEndPoint.createRecord
+Event Bus Service -EventBus.createRecord
+Message Source
+JDBC Data Source
+Redis Data Source
+MongoDb Data Source
+
+
+How to store resources into Service Registry in vertx
+
+1.Record - bag - inside bag you can store any resource-store that record into registry server.
+
+Vertx Resource Storage:
+
+Vertx resources are stored in side registry by packing resouces into a object called "Record".
+
+
+Implementation:
+
+What you need?
+
+1.Registry server- where you can store all shared resources(httpendpoint,jdbcconnection,eventbus...)
+
+Vertx provides default built in Registry Server:
+...............................................
+-Key value data structure;
+  Map- implementations.
+
+Popular Registry Servers:
+.........................
+1.eureka server
+2.Apache zoo keeper
+3.Consule
+4.Kubernetes
+5.Redis
+etc....
+
+Resource--->Record 
+
+Service Discovery Objects:
+
+1.Record
+2.Service
+3.ServiceDiscovery
+
+Vertx has ServiceDiscovery Instance, which helps to publish / un publish ,and discover
+services 
+
+
+Publishing HTTP End Point into Registry, where other verticles can consume that.
+
+Use case : HTTPEndPoint
+
+Steps:
+
+...............................
+1.create Record
+
+2.wrap the resources into Record
+
+3.Publish it
+
+
+...............................
+4.Get Record
+
+5.Get Reference from the Record
+
+6.Unpublish it if you dont need
+
+7.Use the Resource(service)
+
+
+Add dependency:
+
+  <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-service-discovery</artifactId>
+    </dependency>
 
 
 
+package com.amex.distributed.serviceregistry;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.servicediscovery.Record;
+import io.vertx.servicediscovery.ServiceDiscovery;
+import io.vertx.servicediscovery.ServiceDiscoveryOptions;
+import io.vertx.servicediscovery.types.HttpEndpoint;
+
+class GreeterRestVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    Router router = Router.router(vertx);
+
+    router.get("/api/hello").handler(rc -> {
+      rc.response().end("Hello,Service Discovery and Registry");
+    });
+    vertx.createHttpServer().requestHandler(router).listen(3000);
+  }
+}
+
+//Consumer Verticle , which communicates GreeterRestVerticle via WebClient not directly but via
+//Service Registry.
+class ConsumerVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Service Communication via Service Discovery
+    ServiceDiscoveryOptions discoveryOptions = new ServiceDiscoveryOptions();
+    //enable discovery server
+    discoveryOptions.setBackendConfiguration(new JsonObject()
+      .put("connection", "127.0.0.1:2181")
+      .put("ephemeral", true)
+      .put("guaranteed", true)
+      .put("basePath", "/services/my-backend")
+    );
+    ServiceDiscovery discovery = ServiceDiscovery.create(vertx, discoveryOptions);
+
+    Router router = Router.router(vertx);
+
+    router.get("/api/greet").handler(rc -> {
+      //Communicate Service Registry and get Record,Get Reference.
+      HttpEndpoint.getWebClient(discovery, new JsonObject().put("name", "greeterApiRecord"), ar -> {
+        //Get Reference from the Record
+        WebClient webClient = ar.result();
+        //do your job with Resource
+        webClient.get("/api/hello").send(result -> {
+          System.out.println("Response is ready!");
+          rc.response().end(result.result().bodyAsString());
+        });
+        rc.response().endHandler(ar1 -> {
+          //remove /release discovery record
+          ServiceDiscovery.releaseServiceObject(discovery, webClient);
+        });
+      });
+
+    });
+    vertx.createHttpServer().requestHandler(router).listen(8080);
 
 
+  }
+}
 
+
+//Publisher Verticle publishes
+class PublisherVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    //Service Registry Server configuration
+    ServiceDiscoveryOptions discoveryOptions = new ServiceDiscoveryOptions();
+    discoveryOptions.setBackendConfiguration(new JsonObject()
+      .put("connection", "127.0.0.1:2181")
+      .put("ephemeral", true)
+      .put("guaranteed", true)
+      .put("basePath", "/services/my-backend")
+    );
+    //Service Registry instance
+    ServiceDiscovery discovery = ServiceDiscovery.create(vertx, discoveryOptions);
+
+    //Create Record
+    Record record = HttpEndpoint.createRecord("greeterApiRecord", "localhost", 3000, "/api/hello");
+
+    //publish the Record
+    //Publish the Record
+    discovery.publish(record, ar -> {
+      if (ar.succeeded()) {
+        System.out.println("Successfully published >>>>" + ar.result().toJson());
+      } else {
+        System.out.println(" Not Published " + ar.cause());
+      }
+    });
+  }
+}
+
+
+public class ServiceRegistryAndDiscoveryVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", ServiceRegistryAndDiscoveryVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception {
+    super.start(startPromise);
+    vertx.deployVerticle(new PublisherVerticle());
+    vertx.deployVerticle(new GreeterRestVerticle());
+    vertx.deployVerticle(new ConsumerVerticle());
+  }
+}
+..............................................................................................
+				   
+Assigment:
+
+1.Create TODOProvider Rest api and TodoConsumer Rest api
+
+User----/api/todos-------TodoProvider------WebClient-or EventBus---TodoConsumer
+									|
+									JDBC pool - 								 CREATE,UPDATE,DELETE
+
+We have to use Discovery to publish webclient reference , and jdbcsource if possible.
+
+Connection informations must be passed to verticle from configuration file.
 
 
 

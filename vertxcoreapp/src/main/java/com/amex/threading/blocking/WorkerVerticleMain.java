@@ -7,6 +7,10 @@ import io.vertx.core.Promise;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 
+//worker verticle -  worker thread
+//inside worker verticle if you write any httpserver which runs in the event loop thread since
+//this createHttpServer is non blocking api always runs in event loop thread.
+//if you want to write a router with blocking code execution, you have to use router.blockingHandler
 class DelayVerticle extends AbstractVerticle {
   @Override
   public void start(Promise<Void> startPromise) throws Exception {
