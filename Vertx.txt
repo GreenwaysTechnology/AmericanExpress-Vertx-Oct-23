@@ -5577,3 +5577,231 @@ public class ReactiveMainVerticle extends AbstractVerticle {
   }
 }
 .....................................................................................
+			Scallablity and High Availablity
+.....................................................................................
+Vertx Types:
+...........
+
+1.Standard Vertx  - Single vertx engine
+2.Clustered Vertx - Mutliple vertx engine
+
+Lets assume i have one verticle which hosts single web server, what if that webserver is down, then client cant talk.
+
+Can we scale the Verticles - Having multiple instances of Single server - clone of verticles.
+
+Running the verticle more no of times.
+
+DeploymentOptions options = new DeploymentOptions().setInstances(5);
+
+vertx.rxDeployVerticle(GreeterService.class.getName(), options).subscribe(res -> {
+      System.out.println(GreeterService.class.getName() + " " + res);
+    }, err -> {
+      System.out.println(err);
+});
+
+Rules when we deploy verticles in scalling:
+
+1.class must be public.
+2.deployVericle method must take fully qualified class name ("com.amex.MyClass")
+  you should not use new Keyword
+
+eg:
+package com.amex.distributed.scalling;
+
+import io.vertx.rxjava3.core.AbstractVerticle;
+import io.vertx.rxjava3.core.http.HttpServer;
+
+public class GreeterService extends AbstractVerticle {
+  @Override
+  public void start() throws Exception {
+    super.start();
+    HttpServer httpServer = vertx.createHttpServer();
+    httpServer.requestStream().toFlowable().subscribe(req -> {
+      req.response().end("Hello!How are you : " + Thread.currentThread().getName() + " =>" + hashCode());
+    });
+    httpServer.rxListen(3000).subscribe(onSuccess -> {
+      System.out.println("Server is Running on " + onSuccess.actualPort());
+    });
+  }
+}
+
+package com.amex.distributed.scalling;
+
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.rxjava3.core.AbstractVerticle;
+
+public class ScallerDeployer extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", ScallerDeployer.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startFuture) throws Exception {
+    super.start(startFuture);
+    DeploymentOptions options = new DeploymentOptions().setInstances(5);
+    vertx.rxDeployVerticle(GreeterService.class.getName(), options).subscribe(res -> {
+      System.out.println(GreeterService.class.getName() + " " + res);
+    }, err -> {
+      System.out.println(err);
+    });
+  }
+}
+....................................................................................
+			  Clustered Vertx
+....................................................................................
+
+Vertx is distributed system.
+We can deploy verticles across multiple vertx engines which may be across machines in the network.
+Vertx engines form group called "Cluster".
+Cluster is group of machines.
+Cluster informations are managed by Cluster Manager.
+
+Vertx communicates via network using cluster managers
+
+Vertx supports cluster manager software
+
+1.Hazelcast - it is default cluster manager which distribued with vertx..
+2.Kubernets as Cluster Manager
+3.ZooKeeper as cluster Manager
+
+<dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-hazelcast</artifactId>
+</dependency>
+
+Vertx Engine Configuration:
+...........................
+
+ClusterManager mgr= new HazlelCastClusterManager();
+VertxOptions options=new VertxOptions().setClusterManager(mgr);
+Vertx.clustered(options).onComplete(res->{
+  Vertx vertx =res.result(); 
+  vertx.deployVerticle()
+})
+
+Publisher Code:
+...............
+package com.amex.distributed.scalling.clustering;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
+import io.vertx.core.spi.cluster.ClusterManager;
+import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+
+public class PublisherVerticle extends AbstractVerticle {
+
+  public static void main(String[] args) {
+
+    ClusterManager mgr = new HazelcastClusterManager();
+    VertxOptions options = new VertxOptions()
+      .setClusterManager(mgr).setHAEnabled(true).setHAGroup("g1");
+
+    Vertx.clusteredVertx(options, vertxAsyncResult -> {
+      if (vertxAsyncResult.succeeded()) {
+        //deploy verticles on cluster env.
+        DeploymentOptions deploymentOptions = new DeploymentOptions()
+          .setInstances(2).setHa(true);
+        vertxAsyncResult.result().deployVerticle("com.amex.distributed.scalling.clustering.PublisherVerticle", deploymentOptions, res -> {
+          if (res.succeeded()) {
+            System.out.println("Deployment id is: " + res.result());
+          } else {
+            System.out.println("Deployment failed!" + res.cause());
+          }
+        });
+
+      } else {
+        System.out.println("Cluster up failed: " + vertxAsyncResult.cause());
+      }
+    });
+
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    RuntimeMXBean runtimeBean = ManagementFactory.getRuntimeMXBean();
+    String jvmName = runtimeBean.getName();
+    //processid
+    long pid = Long.valueOf(jvmName.split("@")[0]);
+    vertx.setPeriodic(5000, ar -> {
+      System.out.println("PID  = " + pid + " Thread = " + Thread.currentThread().getName());
+      //publish message
+      String news = "Last 24 hrs, 50000 covid patients in India" + " From  " + jvmName;
+      vertx.eventBus().publish("news.in.covid", news);
+    });
+
+  }
+}
+...
+Consumer Code:
+package com.amex.distributed.scalling.clustering;
+
+
+import io.vertx.core.*;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.MessageConsumer;
+import io.vertx.core.spi.cluster.ClusterManager;
+import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
+
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+
+public class ConsumerVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    ClusterManager mgr = new HazelcastClusterManager();
+    VertxOptions options = new VertxOptions().setClusterManager(mgr).setHAEnabled(true).setHAGroup("g1");
+    Vertx.clusteredVertx(options, cluster -> {
+      if (cluster.succeeded()) {
+        //Get the reference of Cluster Powered Vertx Engine
+        Vertx vertx = cluster.result();
+        //deploy the verticle in cluster.
+        DeploymentOptions deploymentOptions = new DeploymentOptions().setInstances(3);
+        cluster.result().deployVerticle("com.amex.distributed.scalling.clustering.ConsumerVerticle", deploymentOptions).onSuccess(res -> {
+          System.out.println("Deployment Id => " + res);
+        }).onFailure(err -> {
+          System.out.println(err);
+        });
+      } else {
+        // failed!
+        System.out.println("Cluster is failed" + cluster.cause());
+      }
+    });
+
+
+  }
+
+
+  @Override
+  public void start(Promise<Void> startFuture) throws Exception {
+    super.start(startFuture);
+    System.out.println("started");
+    EventBus eventBus = (EventBus) vertx.eventBus();
+    //Declare Consumer
+    MessageConsumer<String> consumer = eventBus.consumer("news.in.covid");
+    //handle/process the message/news
+    consumer.handler(news -> {
+      RuntimeMXBean runtimeBean = ManagementFactory.getRuntimeMXBean();
+      String jvmName = runtimeBean.getName();
+      System.out.println("Node  Name = " + jvmName);
+      long pid = Long.valueOf(jvmName.split("@")[0]);
+      System.out.println("PID  = " + pid + " Thread = " + Thread.currentThread().getName());
+      System.out.println("News 7's Today News : " + news.body());
+    });
+  }
+}
+.....................................................................................
+
+References:
+...........
+https://github.com/cescoffier/vertx-microservices-workshop
+Vertx In Action 
+
+
+
+
