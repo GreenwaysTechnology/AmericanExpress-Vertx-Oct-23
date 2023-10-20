@@ -4854,7 +4854,7 @@ import java.util.Date;
 public class FirstStream {
     public static void main(String[] args) {
         Observable<String> observable = Observable.create(observer -> {
-            observer.onNext("hello");
+	    observer.onNext("hello");
             observer.onNext("hai");
             Thread.sleep(10000);
             observer.onNext("welcome");
@@ -5172,3 +5172,408 @@ Reactive Streams is an initiative to provide a standard for asynchronous stream 
 
 
 The Team provided common spec:
+
+
+The Team provided common spec:
+
+1.Publisher
+2.Subscriber
+3.Subscription
+4.Processor
+
+After this spec published, Rxjava team relased new version - Rxjava 2 which implements reactive stream specification..
+
+Rxjava 1 - has no implementation of "Reactive Stream Spec"
+
+Rxjava 2 - Reactive Stream Spec implemented.
+
+Rxjava 2 Provided one Simple Observable.
+
+
+Flowable vs Observable
+
+Flowable 
+  emits 0...n items
+  backpressure ready streams
+  implements reactive stream spec
+
+Observable
+  emits 0..n items
+  no backpressure
+  no reactive stream stream spec.
+
+
+
+map vs flatMap:
+
+map is used to transform and return a data.
+
+flatMap is used to transform and flatten inner observable.
+package com.del.reactive.operators.transformation;
+
+import io.reactivex.rxjava3.core.Observable;
+
+public class FlatMapOperator {
+    public static void main(String[] args) {
+        Observable.just("A", "B", "C")
+                .map(String::toLowerCase)
+                .subscribe(
+                        System.out::println, System.out::println, () -> {
+                            System.out.println("done");
+                        }
+                );
+        //flat map. i want to return [1,2,3] for each item
+        Observable.just("A", "B", "C")
+                .flatMap(i -> {
+                    System.out.println("item " + i);
+                    return Observable.just(1, 2, 3);
+                })
+                .subscribe(
+                        System.out::println, System.out::println, () -> {
+                            System.out.println("done");
+                        }
+                );
+    }
+}
+
+....................................................................................
+			Broad Casting
+.....................................................................................
+
+Producer(Stream)-----can be connected with ---one Subscriber : 
+  one to one  This communication style is called "unicast".
+
+Producer(Stream)----can be connected with ----->many subscribers : 
+one to Many  This communication style is called "Multicast".
+
+Based on Multicast communication style stream can be classified into two category.
+
+1.Cold Observable(Cold Stream)
+2.Hot Observable(Hot Stream)
+
+
+1.Cold Observable
+
+1.Observable that doesn’t emit items until a subscriber subscribes.
+
+2.If we have more than one subscriber, then observable will emit sequence of items to all subscribers one by one. : cold
+
+3.Each subscriber get fresh copy of the data from the begining.
+
+4.Most of Observerables are Cold.
+
+package com.mycom;
+
+import io.reactivex.Observable;
+
+import java.util.concurrent.TimeUnit;
+
+public class ColdStream {
+    public static void main(String[] args) throws InterruptedException {
+        //
+        Observable<Long> myObservable = Observable.interval(1, TimeUnit.SECONDS);
+
+        myObservable.subscribe(item -> System.out.println("Observer 1: " + item));
+        //after 3scs new subscriber joins
+        Thread.sleep(3000);
+        myObservable
+                .doOnSubscribe((r) -> System.out.println("Observer 2 Joining"))
+                .subscribe(item -> System.out.println("Observer 2: " + item));
+        Thread.sleep(5000);
+
+    }
+
+}
+
+
+Hot Observable:
+
+1.Observables that don’t wait for any subscription. They start emitting items   when created.
+2.They don’t emit the sequence of items again for a new subscriber.
+
+3.When an item is emitted by hot observable, all the subscribers that are   subscribed will get the emitted item at once.
+
+
+There are many ways to implement hot observables:
+
+1.ConnectableObservable
+2.Subjects
+
+
+1.ConnectableObservable:
+ Used to convert cold stream into hot stream
+
+package com.mycom;
+
+import io.reactivex.Observable;
+import io.reactivex.observables.ConnectableObservable;
+
+import java.util.concurrent.TimeUnit;
+
+package com.mycom;
+
+import io.reactivex.Observable;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.observables.ConnectableObservable;
+
+import java.util.concurrent.TimeUnit;
+
+public class HotStream {
+    public static void main(String[] args) throws InterruptedException {
+        //cold observable
+        Observable<Long> myObservable = Observable.interval(1, TimeUnit.SECONDS);
+        //convert cold into hot
+        ConnectableObservable<Long> connectableObservable = myObservable.publish();
+        //try to connect all subscribers under one single unit.
+        connectableObservable.connect();
+
+      connectableObservable
+                .doOnSubscribe((r) -> System.out.println("Observer 1 Joining"))
+                .subscribe(item -> System.out.println("Observer 1: " + item));
+        Thread.sleep(3000);
+        Disposable subscriber2 =  connectableObservable
+                .doOnSubscribe((r) -> System.out.println("Observer 2 Joining"))
+                .doOnDispose(() -> System.out.println("Subscriber 2 left session"))
+                .subscribe(item -> System.out.println("Observer 2: " + item));
+        Thread.sleep(3500);
+        subscriber2.dispose();
+        connectableObservable
+                .doOnSubscribe((r) -> System.out.println("Observer 3 Joining"))
+                .subscribe(item -> System.out.println("Observer 3: " + item));
+        Thread.sleep(8000);
+
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+				Subjects
+.............................................................................................
+
+ Subject a “hot” Observable variant of the original “cold” Observable
+
+Varieties of Subject:
+
+1.AsyncSubject 
+
+It emits the last value (and only the last value) emitted by the source Observable, and only after that source Observable completes.
+
+(If the source Observable does not emit any values, the AsyncSubject also completes without emitting any values.)
+
+package com.del.reactive.operators.multicast.subjects;
+
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.AsyncSubject;
+
+public class HotAsyncSubject {
+    public static void main(String[] args) {
+
+        Observable<Integer> sourceStream = Observable.create(subscriber -> {
+            for (int i = 0; i <= 20; i++) {
+                subscriber.onNext(i);
+            }
+           subscriber.onComplete();
+        });
+//        Observable<Integer> sourceStream = Observable.just(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        //Create Async Subject
+        AsyncSubject<Integer> asyncSubject = AsyncSubject.create();
+        //connect source stream with async subject
+        sourceStream.subscribe(asyncSubject);
+
+        asyncSubject.subscribe(data -> {
+            System.out.println("Subu's AsyncSubject Subject :" + data);
+        }, err -> {
+            System.out.println(err);
+        }, () -> {
+            System.out.println("Done!");
+        });
+        asyncSubject.subscribe(data -> {
+            System.out.println("Ram's AsyncSubject Subject :" + data);
+        }, err -> {
+            System.out.println(err);
+        }, () -> {
+            System.out.println("Done!");
+        });
+    }
+}
+.............................................................................................
+BehaviorSubject:
+
+
+-When an observer subscribes to a BehaviorSubject, it begins by emitting the item most recently emitted by the source Observable (or a seed/default value if none has yet been emitted) and then continues to emit any other items emitted later by the source Observable(s).
+
+ BehaviourSubject emits the most recently item at the time of subscription or
+ a default item if none has been emitted and then continues the sequence until complete.
+
+package com.del.reactive.operators.multicast.subjects;
+
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
+
+import java.util.concurrent.TimeUnit;
+
+public class HotBehvaiourSubject {
+    public static void main(String[] args) throws InterruptedException {
+        //soure stream
+      //  Observable<Long> sourceStream = Observable.interval(1000, TimeUnit.MILLISECONDS);
+        
+        //This will emit default value
+        Observable sourceStream = Observable.create(observer->{
+
+        });
+        //create Behaviour Subject
+        BehaviorSubject<Long> behaviorSubject = BehaviorSubject.createDefault(0l);
+        //connecting source stream with Behaviour
+        sourceStream.subscribe(behaviorSubject);
+
+        System.out.println("Wait for some seconds");
+        Thread.sleep(10000);
+        // BehaviourSubject emits the most recently item at the time of subscription
+        behaviorSubject.subscribe(data -> {
+            System.out.println("Subu's BehaviorSubject Subject :" + data);
+        }, err -> {
+            System.out.println(err);
+        }, () -> {
+            System.out.println("Done!");
+        });
+
+        behaviorSubject.subscribe(data -> {
+            System.out.println("Ram's BehaviorSubject Subject :" + data);
+        }, err -> {
+            System.out.println(err);
+        }, () -> {
+            System.out.println("Done!");
+        });
+        System.out.println("Wait for some seconds");
+        Thread.sleep(10000);
+    }
+}
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+			  Vertx with Reactive Extension
+.....................................................................................
+
+Vertx integrates reactive extension via rxjava 2 or 3 or mutiny.
+
+Most of the Vertx apis including verticles enabled with reactive.
+
+How to enable reactive vertx?
+
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-rx-java3</artifactId>
+    </dependency>
+
+Vertx original core API with helpers class that provides static methods for converting objects between vert.x core and Rxjava 2 api
+
+RxHelper
+ObservableHelper
+FlowableHelper
+SingleHelper
+MaybeHelper
+CompletableHelper
+
+     via the "Rxified Vertx api enchancing the Vertx Core api"
+
+
+package com.amex.reactive;
+
+import io.reactivex.rxjava3.core.Single;
+import io.vertx.core.Launcher;
+import io.vertx.core.Promise;
+import io.vertx.rxjava3.core.AbstractVerticle;
+import io.vertx.rxjava3.core.eventbus.EventBus;
+import io.vertx.rxjava3.core.http.HttpServer;
+import io.vertx.rxjava3.ext.web.client.HttpResponse;
+import io.vertx.rxjava3.ext.web.client.WebClient;
+import io.vertx.rxjava3.ext.web.codec.BodyCodec;
+
+class ReactiveWebClient extends AbstractVerticle {
+
+  @Override
+  public void start(Promise<Void> startFuture) throws Exception {
+    super.start(startFuture);
+    vertx.createHttpServer().requestHandler(req -> {
+      WebClient webClient = WebClient.create(vertx);
+      Single<HttpResponse<String>> request = webClient
+        .get(3000, "localhost", "/")
+        .as(BodyCodec.string()).rxSend();
+      //fire the http call
+      request.subscribe(result -> {
+        req.response().end(result.body());
+      });
+    }).rxListen(3001).subscribe();
+  }
+}
+
+class EventBusReactive extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startFuture) throws Exception {
+    super.start(startFuture);
+    EventBus eventBus = vertx.eventBus();
+
+    eventBus.consumer("com.amex.addr").toFlowable().subscribe(message -> {
+      System.out.println(message.body().toString());
+      message.reply("PONG");
+    });
+    vertx.setPeriodic(1000, v -> {
+      eventBus.rxRequest("com.amex.addr", "PING").subscribe(reply -> {
+        System.out.println("Received Reply " + reply.body());
+      });
+    });
+  }
+}
+
+
+class WebServerVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startFuture) throws Exception {
+    super.start(startFuture);
+
+    HttpServer httpServer = vertx.createHttpServer();
+    httpServer.requestStream().toFlowable().subscribe(req -> {
+      req.response().end("Stream data over http using web client");
+    });
+    httpServer.rxListen(3000).subscribe(server -> {
+      System.out.println("Server is running");
+    });
+  }
+}
+
+class GreeterVerticle extends AbstractVerticle {
+  @Override
+  public void start(Promise<Void> startFuture) throws Exception {
+    super.start(startFuture);
+
+  }
+}
+
+public class ReactiveMainVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Launcher.executeCommand("run", ReactiveMainVerticle.class.getName());
+  }
+
+  @Override
+  public void start(Promise<Void> startFuture) throws Exception {
+    super.start(startFuture);
+    vertx.deployVerticle(new GreeterVerticle()).subscribe(res -> {
+      System.out.println(res);
+    }, err -> {
+      System.out.println(err);
+    });
+    vertx.deployVerticle(new WebServerVerticle()).subscribe(res -> {
+      System.out.println(res);
+    }, err -> {
+      System.out.println(err);
+    });
+    vertx.deployVerticle(new EventBusReactive()).subscribe(res -> {
+      System.out.println(res);
+    }, err -> {
+      System.out.println(err);
+    });
+    vertx.deployVerticle(new ReactiveWebClient()).subscribe(res -> {
+      System.out.println(res);
+    }, err -> {
+      System.out.println(err);
+    });
+  }
+}
+.....................................................................................
